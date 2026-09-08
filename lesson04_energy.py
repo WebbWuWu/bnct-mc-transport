@@ -14,6 +14,7 @@
 #
 # 2026-09-05 重排：只搬动，未改任何表达式。分块见下方 ===== 标题。
 import math
+import mcstat
 
 a=1664525
 c=1013904223
@@ -45,9 +46,6 @@ def Ex2(alpha):
     return 2
   else:
     return (2-alpha*((math.log(alpha))**2-2*math.log(alpha)+2))/(1-alpha)
-
-def row(name, meas, ref, se):
-    print("  %-12s %14.6f %16.6f %11.2e %+10.2f" % (name, meas, ref, se, (meas-ref)/se))
 
 N=1000000
 N_hist=50000
@@ -81,7 +79,6 @@ for A in [1.0,12.0]:
   r_max=-1.0
   r_sq=0.0
   counts=[0]*M
-  chi2 = 0.0
   x_sum=0.0
   x_sq=0.0
   y_sum=0.0
@@ -108,33 +105,20 @@ for A in [1.0,12.0]:
     y_sq+=mu**2
 
   # ===== 块 2：循环 1 收尾 + 验证 2 / 3 / 5 / 能量比均值 =====
-  for k in range(0,M):
-    chi2 += (counts[k] - E_j)**2 / E_j
-  mean=r_sum/N
-  var=N/(N-1)*(r_sq/N-mean**2)
-  se=math.sqrt(var/N)
-  x_mean=x_sum/N
-  x_var=N/(N-1)*(x_sq/N-x_mean**2)
-  x_se=math.sqrt(x_var/N)
-  y_mean=y_sum/N
-  y_var=N/(N-1)*(y_sq/N-y_mean**2)
-  y_se=math.sqrt(y_var/N)
+  chi2 = mcstat.chi2_uniform(counts, E_j)
+  mean,  var,  se   = mcstat.mean_se(r_sum, r_sq, N)
+  x_mean,x_var,x_se = mcstat.mean_se(x_sum, x_sq, N)
+  y_mean,y_var,y_se = mcstat.mean_se(y_sum, y_sq, N)
   print()
   print("A=%.0f  alpha=%.6f  xi=%.6f  L=%.6f  Naive=%.6f"%(A,al,xi,L,Naive))
-  print("  %-12s %14s %16s %11s %10s"%("check","measured","analytic","SE","dev(sigma)"))
+  mcstat.header()
   print("  %-12s [%.6f, %.6f]  in [%.6f, %.6f]   OK"%("1 range",r_min,r_max,al,1.0))
   print("  %-12s %14.6f %16s %11s %10s"%("2 chi2",chi2,"<43.82 df=19","-","E[chi2]=19"))
-  row("3 xi",       x_mean, xi,        x_se)
-  row("5 mu_lab",   y_mean, 2/3/A,     y_se)
-  row("- E'/E mean",mean,   (1+al)/2,  se)
+  mcstat.check("3 xi",       x_mean, xi,        x_se)
+  mcstat.check("5 mu_lab",   y_mean, 2/3/A,     y_se)
+  mcstat.check("- E'/E mean",mean,   (1+al)/2,  se)
   assert chi2<43.82,\
       "x**2出错,chi2=%.6f"%chi2
-  assert abs(x_mean-xi)<3*x_se,\
-    "kersi取值不对,kersi=%.6f"%xi
-  assert abs(y_mean-2/3/A)<3*y_se,\
-    "mu_lab平均值取值不对,mu_lab——mean=%.6f"%y_mean
-  assert abs(mean-(1+al)/2)<3*se,\
-    "3sigma检验平均值不合格"
 
   # ===== 块 3：循环 4a（样本 = 一条 N_SCAT 次链） =====
   r50_sum=0.0
@@ -148,14 +132,10 @@ for A in [1.0,12.0]:
     r50_sq+=r50**2
 
   # ===== 块 4：4a 收尾 + 验证 4a（Wald，3σ）/ 4a'（方差恒等式，工程 ±3%） =====
-  r50_mean=r50_sum/N_hist
-  r50_var=N_hist/(N_hist-1)*(r50_sq/N_hist-r50_mean**2)
-  r50_se=math.sqrt(r50_var/N_hist)
-  row("4a Wald", r50_mean, N_SCAT*xi, r50_se)
+  r50_mean,r50_var,r50_se = mcstat.mean_se(r50_sum, r50_sq, N_hist)
+  mcstat.check("4a Wald", r50_mean, N_SCAT*xi, r50_se)
   print("  %-12s %14.6f %16.6f %11s %+9.2f%%"
       %("4a' var", r50_var/N_SCAT/x_var, 1.0, "-", (r50_var/N_SCAT/x_var-1)*100))
-  assert abs(r50_mean-N_SCAT*xi)<3*r50_se,\
-    "50次散射平均值不对，r50_mean=%.6f"%r50_mean
   assert abs(r50_var/N_SCAT/x_var-1)<0.03,\
     "r50_var与N_SAT*x_var比值不合格，比值=%.6f"%(r50_var/N_SCAT/x_var)
 
@@ -174,16 +154,12 @@ for A in [1.0,12.0]:
     n_sq+=n**2
 
   # ===== 块 6：4b 收尾 + 验证 4b（普适界，工程）/ 4b'（更新理论，3σ） =====
-  n_mean=n_sum/N_hist_B
-  n_var=N_hist_B/(N_hist_B-1)*(n_sq/N_hist_B-n_mean**2)
-  n_se=math.sqrt(n_var/N_hist_B)
+  n_mean,n_var,n_se = mcstat.mean_se(n_sum, n_sq, N_hist_B)
   print("  %-12s %14.6f  band=[%.4f, %.4f]  (2/3..1 +-3SE)"
       %("4b over", n_mean-Naive, 2/3-3*n_se, 1+3*n_se))
-  row("4b' renew", n_mean, Renew, n_se)
+  mcstat.check("4b' renew", n_mean, Renew, n_se)
   assert 2/3 - 3*n_se <= n_mean - Naive <= 1 + 3*n_se,\
     "n_mean有偏差偏大，Naive=%.6f"%Naive
-  assert abs(n_mean - Renew) < 3*n_se,\
-    "n_mean有偏差偏大，Renew=%.6f"%Renew
 
   # ===== 块 7：打表（下一步要重写成统一表格：实测 / 解析 / σ 偏差） =====
   
