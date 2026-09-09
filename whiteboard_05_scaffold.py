@@ -101,7 +101,7 @@ if __name__ == "__main__":
           % (N, worst, bound, N // 2))
     assert worst <= bound, "读表 %d 次，超过 log2(n)：这不是二分，是遍历" % worst
     
-    assert find(E,8)<(len(E)-1),\
+    assert find(E, E[-1]+1) < (len(E)-1),\
         "E(n)不存在"
 
     print("三条全过。")
