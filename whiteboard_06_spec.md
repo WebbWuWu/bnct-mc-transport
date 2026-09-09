@@ -14,14 +14,99 @@
 再给你一个查询能量 `e`，且已知 `E[0] <= e <= E[n-1]`。
 
 已经有一个函数 `find(E, e)` 返回下标 `k`，约定是 **`E[k] <= e <= E[k+1]`**（这就是 ⑤ 里 `whiteboard_05_scaffold.py` 那个约定，别改）。
+def find(E,e):
+    n=len(E)
+     if e>=E[n-1]:
+            lo=hi=n-2
+    if e<=E[0]:
+            lo=hi=0
+    else:
+        lo=0
+        hi=n-1
+        step=0
+        while True:
+            step+=1
+            assert step < 100, "二分没有收敛：lo=%d hi=%d（区间没在变小）" % (lo, hi)
+            mid=(hi-lo)//2+lo
+            if e>E[mid]:
+                lo=mid
+            if e<E[mid]:
+                hi=mid
+            if e==E[mid]:
+                return mid
+            if hi-lo==1:
+                return lo
+if __name__ == "__main__":
+    import bisect, random
 
----
+    E = [1.0, 2.0, 3.0, 4.0, 5.0]
+
+    # 验证 1：三个边界 —— 抓「循环之前没把不变量建立起来」
+    #   这三个数你要先在纸上写出期望值，再跑。不许跑完了再倒推期望。
+    for e in [0.5, 1.0, 3.0, 4.999, 5.0, 7.0]:
+        print("e=%-7s -> k=%s" % (e, find(E, e)))
+
+    # 验证 2：与 bisect 对拍 —— 抓「比较写反了 / 差一格」
+    #   两个独立算出来的量：你的 find 是一个，标准库是另一个。
+    random.seed(2026)
+    n_bad = 0
+    for _ in range(2000):
+        e = random.uniform(E[0], E[-1] - 1e-12)
+        k_ref = bisect.bisect_right(E, e) - 1
+        if find(E, e) != k_ref:
+            n_bad += 1
+    print("验证 2: 2000 次随机对拍，不一致 %d 次" % n_bad)
+    assert n_bad == 0, "与 bisect 不一致 %d 次" % n_bad
+
+    # 验证 3：比较次数 —— 抓「循环没有真的在砍一半」（退化成线性也能通过验证 1、2！）
+    #   这是三条里唯一能抓住「你写的其实是遍历」的一条。
+    N = 100000
+    Ebig = [float(i) for i in range(N)]
+    calls = [0]
+
+    class Counted(list):                 # 每读一次 E[i] 计一次数
+        def __getitem__(self, i):
+            calls[0] += 1
+            return list.__getitem__(self, i)
+
+    Ec = Counted(Ebig)
+    random.seed(7)
+    worst = 0
+    for _ in range(200):
+        calls[0] = 0
+        find(Ec, random.uniform(0.0, float(N - 1)))
+        worst = max(worst, calls[0])
+    # 上界放宽到 4*log2(n)：这条判据抓的是**数量级**，不是常数。
+    # 二分无论怎么写都在 ~20 次量级；遍历是 50000 次。中间隔着三个数量级，不会误判。
+    bound = 4 * int(math.log2(N))
+    print("验证 3: n=%d，最坏读表次数 = %d（上界 %d，线性扫描要 ~%d）"
+          % (N, worst, bound, N // 2))
+    assert worst <= bound, "读表 %d 次，超过 log2(n)：这不是二分，是遍历" % worst
+    
+    assert find(E, E[-1]+1) < (len(E)-1),\
+        "E(n)不存在"
+
+    print("三条全过。")
+
 
 ## 五问
 
 ### (1) 线性-线性插值
 
 写出用 `E[k]`、`E[k+1]`、`S[k]`、`S[k+1]`、`e` 表达 `S(e)` 的公式。
+def s(e):
+    k=find(E,e)
+    if k==0:
+        k=1e-12
+    return (S[k]+(e-E[k])*(S[k+1]-S[k])/(E[k+1]-E[k]))
+if __name__=="__main__":
+    k=find(E,e)
+    e1=E[k]
+    assert s(e1)==S[k],"端点自检不合格，S（e）=%.6f"%s(e1)
+    e2=E[k+1]
+    assert s(e2)==S[k+1],"端点自检不合格，S（e）=%.6f"%s(e2)
+    e3=(E[k]+E[k+1])/2
+    assert s(e3)==(S[k]+S[k+1])/2,"中点自检不合格，S（e）=%.6f"%s(e3)
 
 写完立刻做**两个端点自检**：把 `e = E[k]` 代进去应该得到 `S[k]`，`e = E[k+1]` 应该得到 `S[k+1]`。**代不出来就是写错了，当场改。**
 
@@ -31,19 +116,32 @@
 
 想一件具体的事：**¹⁰B 的吸收截面在热能区遵循 1/v 律**，也就是 σ ∝ E^(−1/2)。
 
-- 在**普通坐标**（σ 对 E）上，这条曲线长什么样？
-- 在 **log σ 对 log E** 坐标上，它长什么样？**斜率是多少？**
-- 于是「在两点之间插值」这件事，在哪个坐标系里误差小得多？为什么？
+- 在**普通坐标**（σ 对 E）上，这条曲线长什么样？ 曲线
+- 在 **log σ 对 log E** 坐标上，它长什么样？**斜率是多少？**直线，-1/2
+- 于是「在两点之间插值」这件事，在哪个坐标系里误差小得多？为什么？log-log，1/v 律在那段是弯的 —— 弦永远在曲线上方，系统性高估，而且高估量随区间跨度指数增长。
 
-再想一步：ENDF 的能量网格从 **1e-5 eV 到 2e7 eV**，跨 **12 个数量级**。相邻两点在低能区可能只差百分之几，在高能区可能差好几倍。**这对「用直线连两点」意味着什么？**
+再想一步：ENDF 的能量网格从 **1e-5 eV 到 2e7 eV**，跨 **12 个数量级**。相邻两点在低能区可能只差百分之几，在高能区可能差好几倍。**这对「用直线连两点」意味着什么？**可均匀采样很多数据
 
 ### (3) 写出 log-log 插值公式
 
 要求：**用 `math.log` 和 `math.exp` 写出来**，形式上和 (1) 平行（也就是「在 log 空间里做 (1)」）。
 
 写完同样做端点自检。
+def s(e):
+    k=find(E,e)
+    return S[k] * (e/E[k])**(math.log(S[k+1]/S[k])/math.log(E[k+1]/E[k]))
+    
+if __name__=="__main__":
+    k=find(E,e)
+    e1=E[k]
+    assert s(e1)==S[k],"端点自检不合格，S（e）=%.6f"%s(e1)
+    e2=E[k+1]
+    assert s(e2)==S[k+1],"端点自检不合格，S（e）=%.6f"%s(e2)
+    e3=math.exp((math.log(E[k]*E[k+1])/2))
+    assert abs(s(e3)-math.exp((math.log(S[k]*S[k+1])/2)))<1e-12,"中点自检不合格，S（e）=%.6f"%s(e3)
 
-**然后把它化简成幂函数形式** `S(e) = S[k] * (e/E[k])**p`，并写出 `p` 是什么。
+
+**然后把它化简成幂函数形式** `S(e) = S[k] * (e/E[k])**p`，并写出 `p` 是什么。p=math.log(S[k+1]/S[k])/math.log(E[k+1]/E[k])
 
 ⚠️ 化简完之后回头看 (2)：**对 1/v 律，`p` 应该等于多少？** 如果你的公式代入 1/v 的数据不能给出那个 `p`，说明推错了。**这就是这一问自带的判据。**
 
@@ -59,9 +157,9 @@ log-log 插值有三个输入会让它当场崩或者静默出错。**各写一�
 
 `find` 的约定是 `E[k] <= e <= E[k+1]`，所以合法的 `k` 范围是 `0 .. n-2`。
 
-- 你的插值函数需不需要自己再检查一遍 `k` 的范围？**还是相信 `find`？**
+- 你的插值函数需不需要自己再检查一遍 `k` 的范围？**还是相信 `find`？**我相信
 - 如果检查，用 `assert` 还是 `if ... raise`？**这两者的区别是什么**（提示：`python -O` 会做什么）？
-
+应该用if raise，这样可以在外部直接检查函数，python -0会删掉assert
 ---
 
 ## 判分表
