@@ -162,8 +162,8 @@ for path, label in CASES:
 #      y 轴是通量，单位是每平方厘米每个源中子（讲义里给了 LaTeX 写法）
 #    ⚠️ 全部用英文 —— 中文在默认字体下会变成一排方块（讲义坑②）。
 # ------------------------------------------------------------
-ax.set_xlabel("depth/cm")
-ax.set_ylabel("flux/percm**2")
+ax.set_xlabel("depth (cm)")
+ax.set_ylabel("flux (cm$^{-2}$ per source neutron)")
 ax.set_title("Track-length flux in a 1D slab (N=1e6, seed=2026)")
 
 # legend() 会自动收集上面所有带 label= 的曲线，生成图例。
@@ -172,6 +172,9 @@ ax.legend()
 
 # grid 画淡网格；alpha 是透明度，0=全透明看不见，1=不透明。
 ax.grid(True, alpha=0.3)
+# y 用对数轴：case1 是纯吸收，通量按 exp(-Σt·z) 衰减，在半对数坐标上必须是一条直线。
+# ⚠️ set_yscale("log") 是以 10 为底，所以图上量出来的斜率是 -Σt*log10(e) = -0.434，不是 -Σt。
+ax.set_yscale("log")
 
 # ------------------------------------------------------------
 # ⑥ 存图 和 看图，两行
