@@ -1,6 +1,11 @@
 __pycache__/
 *.pyc
 .vscode/
-*.png
+__pycache__/
+*.pyc
+.vscode/
+before_*.txt
+after_*.txt
+复习手册_*.pdf
 before_*.txt
 after_*.txt
