@@ -20,6 +20,10 @@
 #  （对比：你在 lesson03 里写的是 import mcstat，没起别名，因为 mcstat 本来就短。）
 # ------------------------------------------------------------
 import matplotlib.pyplot as plt
+import os
+
+# 路径一律从本文件自己的位置算起，不依赖启动时的工作目录。
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 # ------------------------------------------------------------
@@ -107,9 +111,9 @@ def read_flux_csv(path):
 #     才表示「一个真正的反斜杠」。（另一种写法是在引号前加 r，即 r"$\Sigma_t$"。）
 # ------------------------------------------------------------
 CASES = [
-    ("flux_case1.csv", "case 1: d=2.0, $\\Sigma_t$=1.0, $\\Sigma_s$=0.0"),
-    ("flux_case2.csv", "case 2: d=2.0, $\\Sigma_t$=1.0, $\\Sigma_s$=0.8"),
-    ("flux_case3.csv", "case 3: d=5.0, $\\Sigma_t$=1.0, $\\Sigma_s$=0.9"),
+    (os.path.join(HERE, "flux_case1.csv"), "case 1: d=2.0, $\\Sigma_t$=1.0, $\\Sigma_s$=0.0"),
+    (os.path.join(HERE, "flux_case2.csv"), "case 2: d=2.0, $\\Sigma_t$=1.0, $\\Sigma_s$=0.8"),
+    (os.path.join(HERE, "flux_case3.csv"), "case 3: d=5.0, $\\Sigma_t$=1.0, $\\Sigma_s$=0.9"),
 ]
 
 # 坑③ 的验法开关：临时改成 100.0 跑一次，看误差棒是不是明显变大了，然后改回 1.0。
@@ -189,7 +193,7 @@ ax.set_yscale("log")
 #       想一想：show() 弹出窗口、你关掉它之后，那块画布还在不在？
 #       顺序错了你会得到一张全白的 png，而且程序不报任何错。
 # ------------------------------------------------------------
-fig.savefig("lesson03_flux.png", dpi=150, bbox_inches="tight")
+fig.savefig(os.path.join(HERE, "lesson03_flux.png"), dpi=150, bbox_inches="tight")
 plt.show()
 
 

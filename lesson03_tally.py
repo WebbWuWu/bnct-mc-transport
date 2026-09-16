@@ -114,6 +114,10 @@
 # ============================================================
 import mcstat
 import math
+import os
+
+# 路径一律从本文件自己的位置算起，不依赖启动时的工作目录。
+HERE = os.path.dirname(os.path.abspath(__file__))
 a=1664525
 c=1013904223
 m=2**32
@@ -285,7 +289,7 @@ N = 1000000
 print("case1:纯吸收：d=2.0,sigma_t=1.0,sgma_s=0.0")
 T,R,Ab,TA,sum1,sq1,dz1,v_sum1,v_sq1,sigma_t1=run_slab(N,2026,2.0,1.0,0.0)
 print("T=%.6f,R=%.6f,A=%.6f,T+R+A=%.6f,Ta=%.6f"%(T,R,Ab,T+R+Ab,TA))
-print_flux_table(sum1,sq1,N,dz1,NL,"case1:纯吸收：d=2.0,sigma_t=1.0,sgma_s=0.0",csv_path="flux_case1.csv")
+print_flux_table(sum1,sq1,N,dz1,NL,"case1:纯吸收：d=2.0,sigma_t=1.0,sgma_s=0.0",csv_path=os.path.join(HERE, "flux_case1.csv"))
 assert abs(T + R + Ab - 1.0) < 1e-12, \
     "守恒破了：T+R+A=%.15f" % (T + R + Ab)
 for j in range(NL):
@@ -310,7 +314,7 @@ print("  case 1 自检通过")
 print("case2 各向同性散射：d=2.0,sigma_t=1.0,sigma_s=0.8")
 Ta,Ra,Ac,TB,sum2,sq2,dz2,v_sum2,v_sq2,sigma_t2=run_slab(N,2026,2.0,1.0,0.8)
 print("T=%.6f,R=%.6f,A=%.6f,T+R+A=%.6f,Ta=%.6f"%(Ta,Ra,Ac,Ta+Ra+Ac,TB))
-print_flux_table(sum2,sq2,N,dz2,NL,"case2 各向同性散射：d=2.0,sigma_t=1.0,sigma_s=0.8",csv_path="flux_case2.csv")
+print_flux_table(sum2,sq2,N,dz2,NL,"case2 各向同性散射：d=2.0,sigma_t=1.0,sigma_s=0.8",csv_path=os.path.join(HERE, "flux_case2.csv"))
 assert abs(Ta+Ra+Ac - 1.0) < 1e-12, \
     "守恒破了：T+R+A=%.15f" % (Ta+Ra+Ac)
     
@@ -326,7 +330,7 @@ assert abs(mean2)<3*err_t2,\
 print("case3 各向同性散射：d=5.0,sigma_t=1.0,sigma_s=0.9")
 Tb,Rb,Ad,TC,sum3,sq3,dz3,v_sum3,v_sq3,sigma_t3=run_slab(N,2026,5.0,1.0,0.9)
 print("T=%.6f,R=%.6f,A=%.6f,T+R+A=%.6f,Ta=%.6f"%(Tb,Rb,Ad,Tb+Rb+Ad,TC))
-print_flux_table(sum3,sq3,N,dz3,NL,"case3 各向同性散射：d=5.0,sigma_t=1.0,sigma_s=0.9",csv_path="flux_case3.csv")
+print_flux_table(sum3,sq3,N,dz3,NL,"case3 各向同性散射：d=5.0,sigma_t=1.0,sigma_s=0.9",csv_path=os.path.join(HERE, "flux_case3.csv"))
 assert abs(Tb+Rb+Ad - 1.0) < 1e-12, \
     "守恒破了：T+R+A=%.15f" % (Tb+Rb+Ad)
     

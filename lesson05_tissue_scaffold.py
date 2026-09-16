@@ -17,6 +17,10 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+
+# 路径一律从本文件自己的位置算起，不依赖启动时的工作目录。
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 from xslib import total_xs      # 改名成 xslib.py 的话这行要跟着改
 
@@ -182,5 +186,5 @@ ax.set_ylabel(r"Macroscopic total cross section $\Sigma_t$ (cm$^{-1}$)")
 ax.set_title("ICRU-44 soft tissue, ENDF/B-VIII.0, 294 K (H+C+N+O only)")
 ax.legend()
 ax.grid(True, which="both", alpha=0.3)
-fig.savefig("tissue_sigma.png", dpi=150, bbox_inches="tight")
+fig.savefig(os.path.join(HERE, "tissue_sigma.png"), dpi=150, bbox_inches="tight")
 plt.show()

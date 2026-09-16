@@ -1,6 +1,10 @@
 from xslib import total_xs
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+
+# 路径一律从本文件自己的位置算起，不依赖启动时的工作目录。
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 T="294K"
 E_b, tot_b, at_b, i0_b,awr_b = total_xs("B10", T)
@@ -21,7 +25,7 @@ plt.ylabel("Total cross section (barn)")
 plt.legend()
 plt.grid(True, which="both", alpha=0.3)   # which="both" 连次刻度线也画，对数图上有用
 
-plt.savefig("total_xs.png", dpi=150)
+plt.savefig(os.path.join(HERE, "total_xs.png"), dpi=150)
 plt.show()
 
 k = i0_b
