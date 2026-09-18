@@ -51,4 +51,3 @@ if __name__ == "__main__":
     chi2_got=chi2_uniform(counts,expected)
     assert abs(chi2_hand-chi2_got)<1e-12,"自测2卡方不合格，真实卡方=%.6f，算出卡方=%.6f"%(chi2_hand,chi2_got)
     print("mcstat 自测通过")
-        

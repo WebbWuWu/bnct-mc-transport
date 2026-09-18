@@ -216,4 +216,3 @@ for A in [1.0,12.0]:
     "n_mean有偏差偏大，Naive=%.6f"%Naive
   assert abs(n_mean - Renew) < 3*n_se,\
     "n_mean有偏差偏大，Renew=%.6f"%Renew
-
