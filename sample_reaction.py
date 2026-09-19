@@ -44,11 +44,11 @@
 # ============================================================
 
 
-def sample_reaction(sigma, total, xi):
+def sample_reaction(sigma, total, xi,order):
     """按 sigma[k]/total 的占比抽一个反应道，返回原始下标 k。
     做法：把下标按 sigma 从大到小排队，然后从大的那头累加着扫。
     """
-
+    assert len(order)==len(sigma),"order和sigma长度不一致"
     n = len(sigma)
 
     # ---- 判据 1 / 2 / 3：和二分版【逐字相同】，已填好，不要动 ----
@@ -63,8 +63,6 @@ def sample_reaction(sigma, total, xi):
     # ------------------------------------------------------------
     #   跑过 sorted_key_first_look.py 的话这一行你已经见过了，两种写法都行。
     #   ⚠️ 排完序 sigma 本身一个字不动，别去改 sigma。
-    order = sorted(range(n),key=lambda i: sigma[i],reverse=True)
-
     # ------------------------------------------------------------
     # 空 2：线性扫描
     # ------------------------------------------------------------
@@ -89,7 +87,7 @@ def sample_reaction(sigma, total, xi):
     for rank in range(n):
         k = order[rank]            # 已填：rank 是排名，k 是原始下标
         acc += sigma[k]
-        if xi<=acc/total:                   # 空 2
+        if xi<acc/total:                   # 空 2
             return k
 
     # ------------------------------------------------------------
@@ -183,7 +181,7 @@ if __name__ == "__main__":
             xi = rng.random()
             total_draws += 1
 
-            k_lin = sample_reaction(sigma, tot, xi)
+            k_lin = sample_reaction(sigma, tot, xi,order)
             k_bis = order[sample_reaction_bisect(sig_sorted, tot, xi)]
 
             # ---- 空 4：主判据（2026-09-18，Claude 写）----
