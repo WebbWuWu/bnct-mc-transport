@@ -32,7 +32,7 @@ T = "294K"
 NA   = 6.02214076e23        # 阿伏伽德罗常数 mol^-1
 M_N  = 1.00866491588        # 中子质量，单位 u（数值上等于 g/mol）
 RHO  = 1.06                 # 软组织密度 g/cm^3   ← ICRU Report 44 (1989)
-BARN = 1.0e-24              # 1 barn = 1e-24 cm^2
+from xs_lookup import BARN              # 1 barn = 1e-24 cm^2
 
 #  ICRU-44 成人软组织，质量分数。出处：ICRU Report 44 (1989)，
 #  NIST SRD 126 表里叫 "Tissue, Soft (ICRU-44)"。

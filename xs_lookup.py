@@ -6,6 +6,7 @@ LIB    = r"E:\BNCT_GPU\lib80x_hdf5"
 NUC    = "B10"
 T      = "294K"
 E_TEST = 0.0253
+BARN = 1.0e-24 
 
 def load_nuclide(nuc,T):
     path=os.path.join(LIB,nuc+".h5")
