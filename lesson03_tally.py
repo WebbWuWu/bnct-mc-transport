@@ -116,30 +116,9 @@ import mcstat
 import math
 import os
 
+from  rng import lcg, isotropic_direction
 # 路径一律从本文件自己的位置算起，不依赖启动时的工作目录。
 HERE = os.path.dirname(os.path.abspath(__file__))
-a=1664525
-c=1013904223
-m=2**32
-
-class lcg:
-    def __init__(self,seed):
-        self.state=seed
-    def uint(self):
-        self.state=(self.state*a+c)%m
-        return self.state
-    def random(self):
-        return self.uint()/m
-
-
-def isotropic_direction(rng):
-    mu=rng.random()*2.0-1.0
-    phi=2*rng.random()*math.pi
-    sin_theta=math.sqrt(1-mu**2)
-    u=sin_theta*math.cos(phi)
-    v=sin_theta*math.sin(phi)
-    w=mu
-    return u,v,w
 
 Max=10000
 
@@ -284,62 +263,62 @@ def print_flux_table(track_sum, track_sq, N, dz, NL, title,csv_path=None):
             f.write("%d,%.6f,%.6f,%.6f,%.8e,%.8e,%.8f\n" % (k+1, z_lo, z_hi, z_mid, phi, err, R))
         
 #test
-N = 1000000
+if __name__ == "__main__":
+    N = 1000000
+    print("case1:纯吸收：d=2.0,sigma_t=1.0,sgma_s=0.0")
+    T,R,Ab,TA,sum1,sq1,dz1,v_sum1,v_sq1,sigma_t1=run_slab(N,2026,2.0,1.0,0.0)
+    print("T=%.6f,R=%.6f,A=%.6f,T+R+A=%.6f,Ta=%.6f"%(T,R,Ab,T+R+Ab,TA))
+    print_flux_table(sum1,sq1,N,dz1,NL,"case1:纯吸收：d=2.0,sigma_t=1.0,sgma_s=0.0",csv_path=os.path.join(HERE, "flux_case1.csv"))
+    assert abs(T + R + Ab - 1.0) < 1e-12, \
+        "守恒破了：T+R+A=%.15f" % (T + R + Ab)
+    for j in range(NL):
+        j1,j2,Err1=mcstat.mean_se(sum1[j],sq1[j],N)
+        err1=Err1/dz1
+        assert abs(sum1[j]/N/dz1-((math.exp(-sigma_t1*j*dz1)-math.exp(-sigma_t1*(dz1+j*dz1)))/(dz1*sigma_t1)))<3*err1,\
+            "3sigma检验不合格"
+    mean1,var1,err_t1=mcstat.mean_se(v_sum1,v_sq1,N)
+    assert abs(mean1)<3*err_t1,\
+        "case1碰撞次数检验不合格"
 
-print("case1:纯吸收：d=2.0,sigma_t=1.0,sgma_s=0.0")
-T,R,Ab,TA,sum1,sq1,dz1,v_sum1,v_sq1,sigma_t1=run_slab(N,2026,2.0,1.0,0.0)
-print("T=%.6f,R=%.6f,A=%.6f,T+R+A=%.6f,Ta=%.6f"%(T,R,Ab,T+R+Ab,TA))
-print_flux_table(sum1,sq1,N,dz1,NL,"case1:纯吸收：d=2.0,sigma_t=1.0,sgma_s=0.0",csv_path=os.path.join(HERE, "flux_case1.csv"))
-assert abs(T + R + Ab - 1.0) < 1e-12, \
-    "守恒破了：T+R+A=%.15f" % (T + R + Ab)
-for j in range(NL):
-    j1,j2,Err1=mcstat.mean_se(sum1[j],sq1[j],N)
-    err1=Err1/dz1
-    assert abs(sum1[j]/N/dz1-((math.exp(-sigma_t1*j*dz1)-math.exp(-sigma_t1*(dz1+j*dz1)))/(dz1*sigma_t1)))<3*err1,\
-        "3sigma检验不合格"
-mean1,var1,err_t1=mcstat.mean_se(v_sum1,v_sq1,N)
-assert abs(mean1)<3*err_t1,\
-    "case1碰撞次数检验不合格"
+    assert R == 0.0, \
+        "纯吸收不可能反射，实际 R=%.6f" % R
 
-assert R == 0.0, \
-    "纯吸收不可能反射，实际 R=%.6f" % R
+    p = math.exp(-2.0)
+    se = (p * (1 - p) / N) ** 0.5
+    assert abs(T - p) < 3 * se, \
+        "T=%.6f 偏离解析解 %.6f 达 %.2f 个标准误" % (T, p, (T - p) / se)
 
-p = math.exp(-2.0)
-se = (p * (1 - p) / N) ** 0.5
-assert abs(T - p) < 3 * se, \
-    "T=%.6f 偏离解析解 %.6f 达 %.2f 个标准误" % (T, p, (T - p) / se)
+    print("  case 1 自检通过")
 
-print("  case 1 自检通过")
-
-print("case2 各向同性散射：d=2.0,sigma_t=1.0,sigma_s=0.8")
-Ta,Ra,Ac,TB,sum2,sq2,dz2,v_sum2,v_sq2,sigma_t2=run_slab(N,2026,2.0,1.0,0.8)
-print("T=%.6f,R=%.6f,A=%.6f,T+R+A=%.6f,Ta=%.6f"%(Ta,Ra,Ac,Ta+Ra+Ac,TB))
-print_flux_table(sum2,sq2,N,dz2,NL,"case2 各向同性散射：d=2.0,sigma_t=1.0,sigma_s=0.8",csv_path=os.path.join(HERE, "flux_case2.csv"))
-assert abs(Ta+Ra+Ac - 1.0) < 1e-12, \
-    "守恒破了：T+R+A=%.15f" % (Ta+Ra+Ac)
-    
-assert Ra != 0.0, \
-    "各向异性散射一定有反射，实际 R=%.6f" %Ra
-
-mean2,var2,err_t2=mcstat.mean_se(v_sum2,v_sq2,N)   
-assert abs(mean2)<3*err_t2,\
-    "case2碰撞次数检验不合格"
-    
-
+    print("case2 各向同性散射：d=2.0,sigma_t=1.0,sigma_s=0.8")
+    Ta,Ra,Ac,TB,sum2,sq2,dz2,v_sum2,v_sq2,sigma_t2=run_slab(N,2026,2.0,1.0,0.8)
+    print("T=%.6f,R=%.6f,A=%.6f,T+R+A=%.6f,Ta=%.6f"%(Ta,Ra,Ac,Ta+Ra+Ac,TB))
+    print_flux_table(sum2,sq2,N,dz2,NL,"case2 各向同性散射：d=2.0,sigma_t=1.0,sigma_s=0.8",csv_path=os.path.join(HERE, "flux_case2.csv"))
+    assert abs(Ta+Ra+Ac - 1.0) < 1e-12, \
+        "守恒破了：T+R+A=%.15f" % (Ta+Ra+Ac)
         
-print("case3 各向同性散射：d=5.0,sigma_t=1.0,sigma_s=0.9")
-Tb,Rb,Ad,TC,sum3,sq3,dz3,v_sum3,v_sq3,sigma_t3=run_slab(N,2026,5.0,1.0,0.9)
-print("T=%.6f,R=%.6f,A=%.6f,T+R+A=%.6f,Ta=%.6f"%(Tb,Rb,Ad,Tb+Rb+Ad,TC))
-print_flux_table(sum3,sq3,N,dz3,NL,"case3 各向同性散射：d=5.0,sigma_t=1.0,sigma_s=0.9",csv_path=os.path.join(HERE, "flux_case3.csv"))
-assert abs(Tb+Rb+Ad - 1.0) < 1e-12, \
-    "守恒破了：T+R+A=%.15f" % (Tb+Rb+Ad)
-    
-assert Rb != 0.0, \
-    "各向异性散射一定有反射，实际 R=%.6f" %Rb
+    assert Ra != 0.0, \
+        "各向异性散射一定有反射，实际 R=%.6f" %Ra
 
-mean3,var3,err_t3=mcstat.mean_se(v_sum3,v_sq3,N)
-assert abs(mean3)<3*err_t3,\
-    "case3碰撞次数检验不合格"
+    mean2,var2,err_t2=mcstat.mean_se(v_sum2,v_sq2,N)   
+    assert abs(mean2)<3*err_t2,\
+        "case2碰撞次数检验不合格"
+        
+
+            
+    print("case3 各向同性散射：d=5.0,sigma_t=1.0,sigma_s=0.9")
+    Tb,Rb,Ad,TC,sum3,sq3,dz3,v_sum3,v_sq3,sigma_t3=run_slab(N,2026,5.0,1.0,0.9)
+    print("T=%.6f,R=%.6f,A=%.6f,T+R+A=%.6f,Ta=%.6f"%(Tb,Rb,Ad,Tb+Rb+Ad,TC))
+    print_flux_table(sum3,sq3,N,dz3,NL,"case3 各向同性散射：d=5.0,sigma_t=1.0,sigma_s=0.9",csv_path=os.path.join(HERE, "flux_case3.csv"))
+    assert abs(Tb+Rb+Ad - 1.0) < 1e-12, \
+        "守恒破了：T+R+A=%.15f" % (Tb+Rb+Ad)
+        
+    assert Rb != 0.0, \
+        "各向异性散射一定有反射，实际 R=%.6f" %Rb
+
+    mean3,var3,err_t3=mcstat.mean_se(v_sum3,v_sq3,N)
+    assert abs(mean3)<3*err_t3,\
+        "case3碰撞次数检验不合格"
 
 #通量随深度先升后降，因为通量随深度的增加而减少，入射面表面没有反散射回流的中子，在表面附近反应的中子无法积累，
 # 当到达一定深度后，反散射中子加未反应中子的衰减大于一开始的衰减。
