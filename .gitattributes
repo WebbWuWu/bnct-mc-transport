@@ -1,0 +1,9 @@
+# 行尾统一：仓库里一律存 LF，检出时按平台走（Windows 上是 CRLF）。
+# 2026-09-19 建。起因：11 个文件因 CRLF 翻转在 git diff --stat 里显示 682 行假改动，
+#            把 "git log --stat 是判据" 这条对账手段污染了。
+
+* text=auto
+
+# 二进制显式保护，不依赖 git 的自动探测
+*.png binary
+*.pdf binary
