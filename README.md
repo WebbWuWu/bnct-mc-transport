@@ -40,21 +40,21 @@ python lesson03_tally.py
 
 | 文件 | 内容 | 验证判据与实测值 |
 |---|---|---|
-| `lesson01_lcg.py` | 手写线性同余发生器（a=1664525, c=1013904223, m=2³²） | N=1e6 样本均值 **0.499922**（理论 0.5）；10 个等宽箱计数落在 **99562–100512**（理论每箱 100000） |
-| `lesson01_flight.py` | 逆变换法抽飞行距离 `s = -ln(1-ξ)/Σt` | N=1e6：均值 **0.599395** vs 1/Σt=0.600312（−0.15%）；中位数 **0.415513** vs ln2/Σt=0.416105；未碰撞穿透率 d=0.5/1.0/2.0/3.0 cm 实测 **0.434267 / 0.188391 / 0.035700 / 0.006614**，解析 0.434787 / 0.189039 / 0.035736 / 0.006755 |
-| `lesson01_error.py` | 样本方差、均值标准误、相对误差 R | 收敛率：`R/(1/√N)` 在 N=1e3→1e6 上为 **1.0120 / 1.0182 / 0.9995 / 0.9994**（指数分布下该比值恒为 1）。误差棒可信度：20 个不同种子，真值落在 1σ 内 **16/20**、2σ 内 **20/20**（理论 68% / 95%） |
+| `archive/lesson01_lcg.py` | 手写线性同余发生器（a=1664525, c=1013904223, m=2³²） | N=1e6 样本均值 **0.499922**（理论 0.5）；10 个等宽箱计数落在 **99562–100512**（理论每箱 100000） |
+| `archive/lesson01_flight.py` | 逆变换法抽飞行距离 `s = -ln(1-ξ)/Σt` | N=1e6：均值 **0.599395** vs 1/Σt=0.600312（−0.15%）；中位数 **0.415513** vs ln2/Σt=0.416105；未碰撞穿透率 d=0.5/1.0/2.0/3.0 cm 实测 **0.434267 / 0.188391 / 0.035700 / 0.006614**，解析 0.434787 / 0.189039 / 0.035736 / 0.006755 |
+| `archive/lesson01_error.py` | 样本方差、均值标准误、相对误差 R | 收敛率：`R/(1/√N)` 在 N=1e3→1e6 上为 **1.0120 / 1.0182 / 0.9995 / 0.9994**（指数分布下该比值恒为 1）。误差棒可信度：20 个不同种子，真值落在 1σ 内 **16/20**、2σ 内 **20/20**（理论 68% / 95%） |
 
 ### 第 2 课：三维方向与一维平板
 
 | 文件 | 内容 | 验证判据与实测值 |
 |---|---|---|
-| `lesson02_direction.py` | 各向同性方向抽样（抽 μ 不抽 θ） | 正确做法：⟨u²⟩=**0.33227**、⟨v²⟩=**0.33402**、⟨w²⟩=**0.33371**（应为 1/3）；w 的 10 个分箱 **19903–20134**（每箱应 20000）。脚本里保留了错误做法（均匀抽 θ）作对照：w 两端箱 **41090 / 40928**，中间约 **12770** —— 粒子堆在两极。**⟨u⟩⟨v⟩⟨w⟩ 三个均值在两种做法下都接近 0，看不出这个错；只有分布能。** |
-| `lesson02_slab.py` | 1D 平板 T/R/A（填空版） | 见 v3 |
-| `lesson02_slab_v3.py` | 同一问题的**无脚手架重写**（关掉全部自动补全，约 180 行） | N=1e5：三个 case 的 `T+R+A=1`（assert，容差 1e-12）；case1 反照率 **严格等于 0**；case1 透射 **0.135300** vs exp(−2)=0.135335（**−0.03σ**）；case1 平均碰撞数 **0.864700** vs 1−exp(−2)=0.864665；case2 **2.2473**、case3 **5.1503**；触顶最大事件数的历史数为 **0** |
+| `archive/lesson02_direction.py` | 各向同性方向抽样（抽 μ 不抽 θ） | 正确做法：⟨u²⟩=**0.33227**、⟨v²⟩=**0.33402**、⟨w²⟩=**0.33371**（应为 1/3）；w 的 10 个分箱 **19903–20134**（每箱应 20000）。脚本里保留了错误做法（均匀抽 θ）作对照：w 两端箱 **41090 / 40928**，中间约 **12770** —— 粒子堆在两极。**⟨u⟩⟨v⟩⟨w⟩ 三个均值在两种做法下都接近 0，看不出这个错；只有分布能。** |
+| `archive/lesson02_slab.py` | 1D 平板 T/R/A（填空版） | 见 v3 |
+| `archive/lesson02_slab_v3.py` | 同一问题的**无脚手架重写**（关掉全部自动补全，约 180 行） | N=1e5：三个 case 的 `T+R+A=1`（assert，容差 1e-12）；case1 反照率 **严格等于 0**；case1 透射 **0.135300** vs exp(−2)=0.135335（**−0.03σ**）；case1 平均碰撞数 **0.864700** vs 1−exp(−2)=0.864665；case2 **2.2473**、case3 **5.1503**；触顶最大事件数的历史数为 **0** |
 
 ### 第 3 课：径迹长度估计器与深度通量
 
-`lesson03_tally.py` — N=1e6，20 层分箱，每层带误差棒（输出存档见 `lesson03_N1e6.txt`）
+`lesson03_tally.py` — N=1e6，20 层分箱，每层带误差棒（输出存档见 `outputs/lesson03_N1e6.txt`）
 
 | case | 几何与截面 | 实测 |
 |---|---|---|
@@ -93,7 +93,7 @@ python lesson03_tally.py
 ### 第 5 课：连续能量截面（ENDF/B-VIII.0，294 K）
 
 `xslib.py`（读库与求和）、`plot_xs.py`（出图）、`lesson05_tissue_scaffold.py`（软组织混合）、
-`h5_first_look.py` 与 `explore_reactions_scaffold.py`（结构探路）。
+`explore/h5_first_look.py` 与 `explore_reactions_scaffold.py`（结构探路）。
 
 **总截面不在库里。** OpenMC 的 HDF5 格式故意不存 MT=1 —— ENDF 的 MT 号是一棵树，
 总截面是树根，存了就有和叶子对不上的风险。程序按每个反应道的 `redundant` 属性**只取叶子求和**；
@@ -208,16 +208,18 @@ B-10 共 58 个反应道，其中 `redundant=1` 的 10 个（MT=4/103/105/107/20
 
 ## 目录
 
+目录（2026-09-20 收纳）：根目录只放**可运行、互相 import 的代码**和它们生成的图/csv；`archive/` 早期练习 · `explore/` 读 HDF5 的探路脚本 · `whiteboard/` 白板题 · `specs/` 各课规格书 · `docs/` 手册与笔记 · `outputs/` 旧输出。
+
 | 类别 | 文件 |
 |---|---|
-| 第 1 课 | `lesson01_lcg.py` `lesson01_flight.py` `lesson01_error.py` |
-| 第 2 课 | `lesson02_direction.py` `lesson02_slab.py` `lesson02_slab_v3.py` |
-| 第 3 课 | `lesson03_tally.py` `plot_lesson03_scaffold.py` `lesson03_N1e6.txt` |
-| 第 4 课 | `lesson04_energy.py` `lesson04_spec.md` |
-| 第 5 课 | `xslib.py` `plot_xs.py` `lesson05_tissue_scaffold.py` `h5_first_look.py` `explore_reactions_scaffold.py` |
-| 公共模块 | `mcstat.py` `mcstat_spec.md` |
-| 白板题（手写练习规格书） | `whiteboard_02_spec.md` `whiteboard_05_spec.md` `whiteboard_05_scaffold.py` `whiteboard_05_rewrite.py` `whiteboard_06_spec.md` `whiteboard_06_loglog.py` |
-| 工具讲义 | `tool_debugger_guide.md` `tool_git_guide.md` `tool_matplotlib_guide.md` `matplotlib_spec.md` |
+| 第 1 课 | `archive/lesson01_lcg.py` `archive/lesson01_flight.py` `archive/lesson01_error.py` |
+| 第 2 课 | `archive/lesson02_direction.py` `archive/lesson02_slab.py` `archive/lesson02_slab_v3.py` |
+| 第 3 课 | `lesson03_tally.py` `plot_lesson03_scaffold.py` `outputs/lesson03_N1e6.txt` |
+| 第 4 课 | `lesson04_energy.py` `specs/lesson04_spec.md` |
+| 第 5 课 | `xslib.py` `plot_xs.py` `lesson05_tissue_scaffold.py` `explore/h5_first_look.py` `explore_reactions_scaffold.py` |
+| 公共模块 | `mcstat.py` `specs/mcstat_spec.md` |
+| 白板题（手写练习规格书） | `whiteboard/whiteboard_02_spec.md` `whiteboard/whiteboard_05_spec.md` `whiteboard/whiteboard_05_scaffold.py` `whiteboard_05_rewrite.py` `whiteboard/whiteboard_06_spec.md` `whiteboard/whiteboard_06_loglog.py` |
+| 工具讲义 | `docs/tool_debugger_guide.md` `docs/tool_git_guide.md` `docs/tool_matplotlib_guide.md` `specs/matplotlib_spec.md` |
 
 ---
 
