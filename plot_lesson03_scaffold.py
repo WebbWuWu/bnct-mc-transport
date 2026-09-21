@@ -92,7 +92,7 @@ def read_flux_csv(path):
     #
     #    写不出「这条抓什么」就把它删掉（每课验证上限 5 条的那条纪律）。
     # ------------------------------------------------------------
-    assert len(parts)>0, "csv 读取异常：%s" % path
+    assert len(z_mid) > 0, "csv 里一行数据都没读到（只有表头或文件为空）：%s  总行数=%d" % (path, len(lines))
 
     # return 一次返回三个值，实际上是打包成一个元组。
     # 调用方写 a, b, c = read_flux_csv(...) 就能一次拆开 —— 和 mean_se 一样。
