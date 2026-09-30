@@ -14,9 +14,29 @@
 
 import math
 from rng import lcg, isotropic_direction
+import os
+import h5py
+import numpy as np
+from xs_lookup import LIB,sigma_at
 
 def path_A_prob(y):
     return y*math.sqrt(math.pi)/(y*math.sqrt(math.pi)+2)
+
+def load_kT(nuc, T):
+    path=os.path.join(LIB,nuc+".h5")
+    assert os.path.exists(path),"文件不在这里:%s"%path
+    with h5py.File(path,"r") as f:
+        root=f[nuc]
+        kT=float(root["kTs"][T][()])
+        # [Claude assert] 抓：读错了温度那一项 / 单位不对。
+        #   两条独立的路：库里存的 kT  vs  玻尔兹曼常数 × 标签上的温度。
+        #   容差 0.5% 的来历：标签按整数 K 四舍五入，最多差 0.5 K / 250 K = 0.2%；
+        #   294K 那一项实测差 0.13%（库按 293.6 K 做的）。读错成 250K 或 600K 那一项，差 15% 以上。
+        T_label = float(T[:-1])
+        assert abs(kT / (8.617333262e-5 * T_label) - 1.0) < 5e-3, \
+            "kT=%r eV 与温度标签 %s 对不上：按标签应约为 %.6f eV，差超过 0.5%%" % (kT, T, 8.617333262e-5 * T_label)
+        return kT
+
 def sample_target(y, rng):
     """抽靶核（讲义 §4.2）。
     输入  y   = 中子速度 / 靶核最可几速度 = sqrt(E*A/kT)
@@ -117,7 +137,20 @@ def free_gas_kinematics(E, u, v, w, A, kT, x, mu_T, rng):
     #     （|v'| = 0 时由 Claude 给的 assert 当场停：④续 甲）
     return El,u2,v2,w2
 
-
+def sigma_at_ext(E, XS, e):
+    # [Claude assert] 抓：能量被上游算成负数 / nan / inf，却被当成「低能」往下外推。
+    #   不加的话：负数 → math.sqrt 报 "math domain error"，报错的位置离真正的错很远；
+    #            nan → 外推出 nan 截面，一路传到 run_slab 那条「Sigma_t 为零」，消息是错的。
+    assert e > 0.0 and math.isfinite(e), "要查的能量 e=%r 不是正的有限数（上游算错了），不能外推" % (e,)
+    if e>=E[0]:
+        sig,total=sigma_at(E,XS,e)
+    else:
+        sig1,total1=sigma_at(E,XS,E[0])
+        sig=[0.0]*len(sig1)
+        for i in range(len(sig1)):
+            sig[i]=sig1[i]*math.sqrt(E[0]/e)
+        total=total1*math.sqrt(E[0]/e)
+    return sig,total
 # ------------------------------------------------------------
 #  Claude 给的三条 assert（成品，去掉行首 # 粘到对应位置）
 # ------------------------------------------------------------
@@ -154,6 +187,7 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None):
         assert len(order[i]) == len(nuclides[i]["XS"])
     
     assert t_cut is None or t_cut > 0.0, "t_cut=%r 必须是 None（不截断）或正数" % (t_cut,)
+    E_cut=[]
     len_nuc=len(nuclides)
     rng=lcg(seed)
     n_T=0
@@ -173,6 +207,8 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None):
         z=z_src
         E=E_src
         tol_sigt_s=0.0
+        u=0
+        v=0
         w=1.0
         track_h=[0.0]*NL
         n_hist=0
@@ -181,7 +217,7 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None):
             sig_al=[]
             tot_ls=[]
             for j in range(len(nuclides)):
-                Sig_j,tot_j=sigma_at(nuclides[j]["E"],nuclides[j]["XS"],E)
+                Sig_j,tot_j=sigma_at_ext(nuclides[j]["E"],nuclides[j]["XS"],E)
                 Sigma_j = nuclides[j]["dens"] * tot_j * BARN
                 sig_ds.append(Sig_j)
                 sig_al.append(Sigma_j)
@@ -276,6 +312,7 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None):
                 break
             if has_sign ==True:
                 nt_cut+=1
+                E_cut.append(E)
                 break
             if len_nuc==1:
                 jn=0
@@ -284,14 +321,16 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None):
             xi=rng.random()
             k=sample_reaction(sig_ds[jn],tot_ls[jn],xi,order[jn])
             if nuclides[jn]["mts"][k]==2:
-                u,v,w=isotropic_direction(rng)
                 n_i+=1
                 n_hist+=1
-                if nuclides[jn]["awr"]is not None:
+                if nuclides[jn]["awr"] is None:
+                    u,v,w=isotropic_direction(rng)
+                else:
                     A=nuclides[jn]["awr"]
-                    al=((A-1)/(A+1))**2
-                    xii=rng.random()
-                    E=E*(al+(1-al)*xii)
+                    kT=nuclides[jn]["kT"]
+                    y=math.sqrt(E*A/kT)
+                    x1,mu_T,k2=sample_target(y,rng)
+                    E,u,v,w=free_gas_kinematics(E,u,v,w,A,kT,x1,mu_T,rng)
             else:
                 n_A+=1
                 n_i+=1
@@ -315,8 +354,12 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None):
     scale = abs(tol_sigt_all) + abs(n_i)
     assert math.isclose(tol_sigt_all - n_i, v_sum,rel_tol=0.0, abs_tol=1e-9*scale), \
                         "验证B总账不一致：累加器=%.6f  n_i=%d  v_sum=%.6f" % (tol_sigt_all, n_i, v_sum)
-    return n_T/N,n_R/N,n_A/N,n_i/N,track_sum,track_sq,dz,v_sum,v_sq,nt_cut,n_sd,n_stuck
+    # [Claude assert] 抓：E_cut 追加的位置 / 层放错（写到 break 后面 → 一条也记不上；放进每一步 → 记多了）
+    assert len(E_cut) == nt_cut, "t_cut 时刻的能量记了 %d 条，但被截断的历史有 %d 条" % (len(E_cut), nt_cut)
+    return n_T/N,n_R/N,n_A/N,n_i/N,track_sum,track_sq,dz,v_sum,v_sq,nt_cut,n_sd,n_stuck,E_cut
 
 
 if __name__ == "__main__":
-    pass
+    E_f = [1e-5, 2e7]; XS_f = [[0.8, 0.8], [0.2, 0.2]]      # 第 6 课那个假库
+    print(sigma_at_ext(E_f, XS_f, 3.1e-6))    # 低于表下限，要外推,sig=[1.44,0.36],total=1.8
+    print(sigma_at_ext(E_f, XS_f, 0.37))      # 在表里，不外推,sig=[0.8,0.2],total=1.0
