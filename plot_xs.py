@@ -8,7 +8,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 T="294K"
 E_b, tot_b, at_b, i0_b,awr_b = total_xs("B10", T)
-E_h, tot_h, at_h, i0_h ,aer_h= total_xs("H1",  T)
+E_h, tot_h, at_h, i0_h ,awr_h= total_xs("H1",  T)
 
 k = i0_b
 p = np.log(tot_b[k+1]/tot_b[k]) / np.log(E_b[k+1]/E_b[k])
