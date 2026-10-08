@@ -17,7 +17,7 @@ from rng import lcg, isotropic_direction
 import os
 import h5py
 import numpy as np
-from xs_lookup import LIB,sigma_at
+from xs_lookup import LIB,sigma_at,find_cell
 
 def path_A_prob(y):
     return y*math.sqrt(math.pi)/(y*math.sqrt(math.pi)+2)
@@ -163,7 +163,31 @@ def sigma_at_ext(E, XS, e):
 # for 循环的 else 里 —— 抓：接受概率是 nan 等导致永远不接受（正常撞满概率约 1e-513）
 # assert False, "抽靶核 1000 轮全被拒（正常情况不可能，必是 bug）：y=%r" % (y,)
 
+def table_1overE(edges):
+    m=[0.0]*(len(edges)-1)
+    m1=[0.0]*(len(edges)-1)
+    for i in range(len(edges)-1):
+        m[i]=math.log(edges[i+1]/edges[i])
+    tot=sum(m)
+    for j in range(len(edges)-1):
+        m1[j]=m[j]/tot
+    return m1
 
+def make_cdf(shares):
+    tot=[0.0]
+    for i in range(len(shares)):
+        tot.append(sum(shares[0:(i+1)]))
+    tot[-1]=1
+    return tot
+
+def sample_E_table(edges, cdf, rng):
+    x1=rng.random()
+    n1=find_cell(cdf,x1)
+    le=edges[n1]
+    re=edges[n1+1]
+    x2=rng.random()
+    E=le*(re/le)**x2
+    return E
 # ============================================================
 #  run_slab（第 7 课版）
 #  2026-09-29 Claude 从 lesson06_continuous.py 第 16–171 行原样复制（机械搬运，用户同意），
@@ -175,9 +199,7 @@ from sample_reaction import sample_reaction
 
 Max=10000
 
-NL=20
-
-def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None):
+def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False, NL=20, src=None):
     if z_src is None:
         z_src=d/2
 
@@ -190,6 +212,9 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None):
     E_cut=[]
     len_nuc=len(nuclides)
     rng=lcg(seed)
+    if src!=None:
+        edges,shares=src
+        cdf=make_cdf(shares)
     n_T=0
     n_R=0
     n_A=0
@@ -203,9 +228,13 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None):
     v_sum=v_sq=0.0
     tol_sigt_all=0.0
     for i in range(N):
+        wt=1.0
         t=0
         z=z_src
-        E=E_src
+        if src==None:
+            E=E_src
+        else:
+            E=sample_E_table(edges,cdf,rng)
         tol_sigt_s=0.0
         u=0
         v=0
@@ -314,13 +343,36 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None):
                 nt_cut+=1
                 E_cut.append(E)
                 break
-            if len_nuc==1:
-                jn=0
+            share2=[0.0]*len(nuclides)
+            si=[0.0]*len(nuclides)
+            sig_s=[0.0]*len(nuclides)
+            for j in range(len(nuclides)):
+                si[j]=sig_al[j]/Sigma_t
+                pl=nuclides[j]["mts"].index(2)
+                sig_s[j]=sig_ds[j][pl]*nuclides[j]["dens"]*BARN
+            sigma_s=sum(sig_s)
+            for j in range(len(nuclides)):
+                share2[j]=sig_s[j]/sigma_s
+            if implicit==False:
+                if len_nuc==1:
+                    jn=0
+                else:
+                    xi1=rng.random()
+                    tot=make_cdf(si)
+                    jn=find_cell(tot,xi1)
+                xi=rng.random()
+                k=sample_reaction(sig_ds[jn],tot_ls[jn],xi,order[jn])
+                is_scat=nuclides[jn]["mts"][k]==2
             else:
-                raise NotImplementedError
-            xi=rng.random()
-            k=sample_reaction(sig_ds[jn],tot_ls[jn],xi,order[jn])
-            if nuclides[jn]["mts"][k]==2:
+                wt=wt*sigma_s/Sigma_t
+                if len_nuc==1:
+                    jn=0
+                else:
+                    cdf2=make_cdf(share2)
+                    xi3=rng.random()
+                    jn=find_cell(cdf2,xi3)
+                is_scat=True
+            if is_scat:
                 n_i+=1
                 n_hist+=1
                 if nuclides[jn]["awr"] is None:
