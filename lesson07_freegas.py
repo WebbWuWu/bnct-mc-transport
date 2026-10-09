@@ -17,7 +17,7 @@ from rng import lcg, isotropic_direction
 import os
 import h5py
 import numpy as np
-from xs_lookup import LIB,sigma_at,find_cell
+from xs_lookup import LIB,sigma_at,find_cell,load_nuclide
 
 def path_A_prob(y):
     return y*math.sqrt(math.pi)/(y*math.sqrt(math.pi)+2)
@@ -198,6 +198,9 @@ from xs_lookup import sigma_at, BARN
 from sample_reaction import sample_reaction
 
 Max=10000
+wt_lo=0.1
+wt_hi=0.2
+Q_val=2341569.0#核数脚本 10/9，801 份额 0.937016
 
 def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False, NL=20, src=None):
     if z_src is None:
@@ -211,13 +214,32 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
     assert t_cut is None or t_cut > 0.0, "t_cut=%r 必须是 None（不截断）或正数" % (t_cut,)
     E_cut=[]
     len_nuc=len(nuclides)
+    ind_B=None
+    ind_N=None
+    ind_102=[]
+    for j in range(len_nuc):
+        if nuclides[j]["name"]=="B10":
+            ind_B=j
+            loca_800=nuclides[j]["mts"].index(800)
+            loca_801=nuclides[j]["mts"].index(801)
+            Q_800=nuclides[j]["Q_value"][loca_800]
+            Q_801=nuclides[j]["Q_value"][loca_801]
+        if nuclides[j]["name"]=="N14":
+            ind_N=j
+            loca_600=nuclides[j]["mts"].index(600)
+            Q_600=nuclides[j]["Q_value"][loca_600]
+        loca_102=nuclides[j]["mts"].index(102)
+        ind_102.append(loca_102)
     rng=lcg(seed)
     if src!=None:
         edges,shares=src
         cdf=make_cdf(shares)
     n_T=0
+    n_ki=0
     n_R=0
     n_A=0
+    nt_w=0
+    nr_w=0
     n_stuck=0
     n_i=0
     nt_cut=0
@@ -225,6 +247,16 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
     dz=d/NL
     track_sum=[0.0]*NL
     track_sq=[0.0]*NL
+    Br_sum=[0.0]*NL
+    Br_sq=[0.0]*NL
+    Bc_sum=[0.0]*NL
+    Bc_sq=[0.0]*NL
+    Nc_sum=[0.0]*NL
+    Nc_sq=[0.0]*NL
+    ag_sum=[0.0]*NL
+    ag_sq=[0.0]*NL
+    DH_sum=[0.0]*NL
+    DH_sq=[0.0]*NL
     v_sum=v_sq=0.0
     tol_sigt_all=0.0
     for i in range(N):
@@ -240,6 +272,11 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
         v=0
         w=1.0
         track_h=[0.0]*NL
+        B_r=[0.0]*NL
+        B_c=[0.0]*NL
+        N_ar=[0.0]*NL
+        a_g=[0.0]*NL
+        D_H=[0.0]*NL
         n_hist=0
         for step in range(Max):
             sig_ds=[]
@@ -253,6 +290,22 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
                 tot_ls.append(tot_j) 
             Sigma_t=sum(sig_al)
             assert Sigma_t > 0.0, "Sigma_t 为零，飞行距离会除零：E=%.6g eV" % E
+            B_reac=0.0
+            B_con=0.0
+            N_coe=0.0
+            a_coe=0.0
+            if ind_B !=None:
+                sig800=sig_ds[ind_B][loca_800]
+                sig801=sig_ds[ind_B][loca_801]
+                tran_coe=nuclides[ind_B]["dens"]*BARN
+                B_reac=tran_coe*(sig800*Q_800+sig801*Q_801)
+                B_con=tran_coe*(sig800+sig801)*Q_val
+            if ind_N !=None:
+                sig600=sig_ds[ind_N][loca_600]
+                N_coe=nuclides[ind_N]["dens"]*BARN*sig600*Q_600
+            for j in range(len_nuc):
+                sig102=sig_ds[j][ind_102[j]]
+                a_coe+=nuclides[j]["dens"]*BARN*sig102
             # 为什么是 1-rng.random() 而不是 rng.random()：
             #   random() 返回 [0,1) —— 0 取得到，1 取不到。若写 -log(xi)，xi=0 时 log 收到 0 → -inf，程序炸。
             #   取 1-xi 后 log 的参数落在 (0,1]，永远取不到 0。两种写法同分布，但安全性完全不同。
@@ -282,7 +335,11 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
             if w == 0.0:
                 k0 = int(z0 / dz)
                 assert 0 <= k0 < NL, "层号越界: k0=%d z0=%.9f" % (k0, z0)
-                track_h[k0] += s
+                track_h[k0] += s*wt
+                B_r[k0]+=wt*s*B_reac
+                B_c[k0]+=wt*s*B_con
+                N_ar[k0]+=wt*s*N_coe
+                a_g[k0]+=wt*s*a_coe
                 seg    += s
                 expect  = s
 
@@ -314,7 +371,11 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
                     assert 0<=k<NL,\
                         "k越界"
                     dz_step=abs(z_step-cur)
-                    track_h[k] += dz_step / abs(w)
+                    track_h[k] += wt*dz_step / abs(w)
+                    B_r[k]+=wt*dz_step / abs(w)*B_reac
+                    B_c[k]+=wt*dz_step / abs(w)*B_con
+                    N_ar[k]+=wt*dz_step / abs(w)*N_coe
+                    a_g[k]+=wt*dz_step / abs(w)*a_coe
                     seg+=dz_step/abs(w)
                     # ③ cur = 这一步的终点
                     cur=z_step
@@ -335,9 +396,11 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
             z = z1                                     
             if z<0:
                 n_R+=1
+                nr_w+=wt
                 break
             if z>d:
                 n_T+=1
+                nt_w+=wt
                 break
             if has_sign ==True:
                 nt_cut+=1
@@ -365,6 +428,13 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
                 is_scat=nuclides[jn]["mts"][k]==2
             else:
                 wt=wt*sigma_s/Sigma_t
+                if wt<wt_lo:
+                    xi4=rng.random()
+                    if xi4<wt/wt_hi:
+                        wt=wt_hi
+                    else:
+                        n_ki+=1
+                        break
                 if len_nuc==1:
                     jn=0
                 else:
@@ -375,6 +445,7 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
             if is_scat:
                 n_i+=1
                 n_hist+=1
+                E_be=E
                 if nuclides[jn]["awr"] is None:
                     u,v,w=isotropic_direction(rng)
                 else:
@@ -383,6 +454,8 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
                     y=math.sqrt(E*A/kT)
                     x1,mu_T,k2=sample_target(y,rng)
                     E,u,v,w=free_gas_kinematics(E,u,v,w,A,kT,x1,mu_T,rng)
+                k_hit=int(z/dz)
+                D_H[k_hit]+=wt*(E_be-E)
             else:
                 n_A+=1
                 n_i+=1
@@ -396,19 +469,65 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
         for j in range(NL):
             track_sum[j]+=track_h[j]
             track_sq[j]+=track_h[j]**2
+            Br_sum[j]+=B_r[j]
+            Br_sq[j]+=B_r[j]**2
+            Bc_sum[j]+=B_c[j]
+            Bc_sq[j]+=B_c[j]**2
+            Nc_sum[j]+=N_ar[j]
+            Nc_sq[j]+=N_ar[j]**2
+            ag_sum[j]+=a_g[j]
+            ag_sq[j]+=a_g[j]**2
+            DH_sum[j]+=D_H[j]
+            DH_sq[j]+=D_H[j]**2
         x = tol_sigt_s - n_hist
         tol_sigt_all += tol_sigt_s
         v_sum+=x
         v_sq+=x**2
     if n_stuck>0:
         print("warning!有%d条历史触顶max_event"% n_stuck)
-    assert n_T+n_R+n_A+n_stuck+nt_cut+n_sd == N
     scale = abs(tol_sigt_all) + abs(n_i)
     assert math.isclose(tol_sigt_all - n_i, v_sum,rel_tol=0.0, abs_tol=1e-9*scale), \
                         "验证B总账不一致：累加器=%.6f  n_i=%d  v_sum=%.6f" % (tol_sigt_all, n_i, v_sum)
+    # [Claude assert] 抓：某种结局的历史没进任何计数器（比如轮盘赌杀掉的），或者一条历史被数了两次。
+    #   两条路：各个结局计数器之和  vs  历史循环跑了 N 圈。
+    assert n_T + n_R + n_A + n_stuck + nt_cut + n_sd + n_ki == N, \
+        "历史去向对不上：漏出 %d+%d、吸收 %d、撞满 %d+%d、截断 %d、轮盘赌 %d，合计 %d ≠ N=%d" \
+        % (n_T, n_R, n_A, n_stuck, n_sd, nt_cut, n_ki,
+           n_T + n_R + n_A + n_stuck + n_sd + nt_cut + n_ki, N)
     # [Claude assert] 抓：E_cut 追加的位置 / 层放错（写到 break 后面 → 一条也记不上；放进每一步 → 记多了）
     assert len(E_cut) == nt_cut, "t_cut 时刻的能量记了 %d 条，但被截断的历史有 %d 条" % (len(E_cut), nt_cut)
-    return n_T/N,n_R/N,n_A/N,n_i/N,track_sum,track_sq,dz,v_sum,v_sq,nt_cut,n_sd,n_stuck,E_cut
+    # 10/9 第 12 条：返回值改字典（框架第 9 问 丙）。这一块由 Claude 代写（用户 20:26 要求），共 26 项。
+    #   前 4 项是「除以 N 之后的比例 / 平均数」，键名带 frac_ / per_hist，免得和条数混。
+    return {
+        # ---- 原来的 13 个（值一个不改，顺序同原来的元组）----
+        "frac_T": n_T/N,            # 透射比例（条数 / N）
+        "frac_R": n_R/N,            # 反射比例
+        "frac_A": n_A/N,            # 真吸收比例（隐式模式下恒为 0）
+        "coll_per_hist": n_i/N,     # 平均每条历史碰撞几次
+        "track_sum": track_sum,
+        "track_sq": track_sq,
+        "dz": dz,
+        "v_sum": v_sum,
+        "v_sq": v_sq,
+        "nt_cut": nt_cut,
+        "n_sd": n_sd,
+        "n_stuck": n_stuck,
+        "E_cut": E_cut,
+        # ---- 10/9 新加的 13 个 ----
+        "Br_sum": Br_sum,           # 硼逐道（eV）
+        "Br_sq": Br_sq,
+        "Bc_sum": Bc_sum,           # 硼常数对照（eV）
+        "Bc_sq": Bc_sq,
+        "Nc_sum": Nc_sum,           # 氮（eV）
+        "Nc_sq": Nc_sq,
+        "ag_sum": ag_sum,           # (n,γ) 反应次数
+        "ag_sq": ag_sq,
+        "DH_sum": DH_sum,           # D_H 反冲（eV）
+        "DH_sq": DH_sq,
+        "nt_w": nt_w,               # 透射权重和
+        "nr_w": nr_w,               # 反射权重和
+        "n_ki": n_ki,               # 轮盘赌杀掉的条数
+    }
 
 
 if __name__ == "__main__":

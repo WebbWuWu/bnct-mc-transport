@@ -20,6 +20,7 @@ def load_nuclide(nuc,T):
             
         mts=[]
         XS=[]
+        Q=[]
 
         for name in sorted(names):
             redundant=root["reactions"][name].attrs["redundant"]
@@ -35,7 +36,8 @@ def load_nuclide(nuc,T):
                 
             XS.append(s)
             mts.append(int(root["reactions"][name].attrs["mt"]))
-    return E,mts,XS,awr
+            Q.append(float(root["reactions"][name].attrs["Q_value"]))
+    return E,mts,XS,awr,Q
 
 def xs_at(E, s, e,lo):
     i=lo+1
@@ -61,7 +63,7 @@ def sigma_at(E,XS,e):
     return sig,total
 
 if __name__ == "__main__":
-    E, mts, XS, awr = load_nuclide(NUC, T)
+    E, mts, XS, awr, Q = load_nuclide(NUC, T)
     i2   = mts.index(2)
     i800 = mts.index(800)
     i801 = mts.index(801)

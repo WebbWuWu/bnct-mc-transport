@@ -172,7 +172,7 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,E_cut=0.0253):
 
 if __name__ == "__main__":
     from xs_lookup import load_nuclide
-    E,mts,XS,awr=load_nuclide("H1","294K")
+    E,mts,XS,awr,Q=load_nuclide("H1","294K")
 
     nuc_H1={
         "E":E,"mts":mts,"XS":XS,"awr":awr,
