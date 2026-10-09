@@ -84,11 +84,19 @@ def equal_prob_edges(nbin):
 
 def build_H1_scatter_only():
     """真库 H-1，只留弹性道（MT=2）= 把吸收关掉。字典里的 kT 用用户的 load_kT 读。"""
-    E, mts, XS, awr = load_nuclide("H1", "294K")
+    E, mts, XS, awr, Q = load_nuclide("H1", "294K")
     i2 = mts.index(2)
-    nuc = {"E": E, "mts": [2], "XS": [XS[i2]], "awr": awr,
+    i102 = mts.index(102)
+    # 10/9 第 12 条：lesson07 的 run_slab 现在 ① 按 "name" 认核素 ② 从 "Q_value" 取 Q
+    #   ③ 函数开头对每个核素找 MT=102 的位置（找不到会 ValueError）。所以字典要带 "name"、"Q_value"，
+    #   而且 mts 里必须有 102。做法：102 那一道的截面全填 0 —— 吸收仍然是关掉的，物理不变。
+    #   随机数流不变的理由：sigma_at 返回 [σ2, 0.0]，总截面 σ2 + 0.0 == σ2 逐位相同；
+    #   order 写成 [[0, 1]]，sample_reaction 扫到第 0 名时 acc/total 已经是 1.0，必在第 0 道返回，
+    #   吃的随机数个数和原来 [[0]] 一样（一个 xi）。check2 仍应逐位 12.949 / 7.442。
+    nuc = {"name": "H1", "E": E, "mts": [2, 102], "XS": [XS[i2], [0.0] * len(E)],
+           "Q_value": [Q[i2], Q[i102]], "awr": awr,
            "dens": 6.4606e22, "kT": load_kT("H1", "294K")}
-    return nuc, [[0]]
+    return nuc, [[0, 1]]
 
 
 def chi2_test(E_list, kT, edges):
@@ -108,9 +116,10 @@ def chi2_test(E_list, kT, edges):
 def run_one(nuc, order, t_cut, edges):
     d = 1.0e6
     r = run_slab(N, SEED, d, [nuc], 1.0, order, z_src=d / 2, t_cut=t_cut)
-    coll, n_T, n_R, n_A = r[3], r[0], r[1], r[2]
-    nt_cut, n_sd, n_stuck = r[9], r[10], r[11]
-    E_cut = r[12]                     # lesson07：t_cut 时刻的能量列表（不是 lesson06 的能量阈值）
+    # 10/9 第 12 条：run_slab 返回字典，按键名取（原来是 r[3], r[0], r[1], r[2] / r[9], r[10], r[11] / r[12]）
+    coll, n_T, n_R, n_A = r["coll_per_hist"], r["frac_T"], r["frac_R"], r["frac_A"]
+    nt_cut, n_sd, n_stuck = r["nt_cut"], r["n_sd"], r["n_stuck"]
+    E_cut = r["E_cut"]                     # lesson07：t_cut 时刻的能量列表（不是 lesson06 的能量阈值）
 
     # 前提：每条历史都活到了 t_cut（没漏、没被吸收、没撞满）。不满足，谱就不是同一时刻的快照。
     assert nt_cut == N and n_T == 0 and n_R == 0 and n_A == 0 and n_stuck == 0 and n_sd == 0, \

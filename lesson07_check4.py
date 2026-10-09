@@ -103,7 +103,7 @@ if __name__ == "__main__":
     print("路 1：awr = %.6f   kT(294K) = %.6f eV   kT(0K) = %.4g eV   σ₀ = %.5f b（取自 0K 表 %.3g eV）"
           % (awr, kT, kT0, sig0, E_REF))
 
-    E, mts, XS, _ = load_nuclide("H1", "294K")
+    E, mts, XS, _, Q = load_nuclide("H1", "294K")
     i2 = mts.index(2)
 
     print("%-10s %-8s %-14s %-14s %s" % ("E (eV)", "y", "路1 闭式 (b)", "路2 代码 (b)", "相对差"))
