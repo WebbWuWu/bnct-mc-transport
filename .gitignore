@@ -9,3 +9,4 @@ after_*.txt
 复习手册_*.pdf
 before_*.txt
 after_*.txt
+outputs/openmc/
