@@ -1,65 +1,137 @@
-from lesson08_dose import OUT_DIR,MASS_FRAC,RHO,T,D,kur_table
+from lesson08_dose import OUT_DIR,MASS_FRAC,RHO,T,D,kur_table,NL
 import os
 import openmc
 import math
+import json
+import numpy as np
 
 openmc.config['cross_sections']="/mnt/e/BNCT_GPU/lib80x_hdf5/cross_sections.xml"
 path1=os.path.join(OUT_DIR,'openmc')
 os.makedirs(path1,exist_ok=True)
 
-soft=openmc.Material(name='soft tissue')
-MASS_sum=0.0
-for nuc in MASS_FRAC.keys():
-    soft.add_nuclide(nuc,MASS_FRAC[nuc],'wo')
-    MASS_sum+=MASS_FRAC[nuc]
-soft.set_density('g/cm3',RHO*MASS_sum)
-soft.temperature=294#和 lesson08 的 T 一致
-mats=openmc.Materials([soft])
-path2=os.path.join(path1,'materials.xml')
-mats.export_to_xml(path2)
+def mater():
+    soft=openmc.Material(name='soft tissue')
+    MASS_sum=0.0
+    for nuc in MASS_FRAC.keys():
+        soft.add_nuclide(nuc,MASS_FRAC[nuc],'wo')
+        MASS_sum+=MASS_FRAC[nuc]
+    soft.set_density('g/cm3',RHO*MASS_sum)
+    soft.temperature=294#和 lesson08 的 T 一致
+    return soft
+
+def geom(mat):  
+    xp1=openmc.XPlane(x0=7.3,boundary_type='reflective')
+    xp2=openmc.XPlane(x0=-7.3,boundary_type='reflective')
+    yp1=openmc.YPlane(y0=7.3,boundary_type='reflective')
+    yp2=openmc.YPlane(y0=-7.3,boundary_type='reflective')
+    zp1=openmc.ZPlane(z0=D,boundary_type='vacuum')
+    zp2=openmc.ZPlane(z0=0,boundary_type='vacuum')
+
+    bou=-xp1&+xp2&-yp1&+yp2&-zp1&+zp2
+
+    c=openmc.Cell(fill=mat,region=bou)
+    geo=openmc.Geometry([c])
+    return geo
+
+def kur():
+    edges,shares=kur_table()
+
+    M=50
+    edges1=[0.0]*((len(edges)-1)*M+1)
+    shares1=[0.0]*(len(shares)*M)
+    dens=[0.0]*(len(shares)*M)
+    edges1[0]=edges[0]
+    for i in range(len(edges)-1):
+        r=(edges[i+1]/edges[i])**(1/M)
+        for m in range(i*M+1,(i+1)*M+1):
+            edges1[m]=edges[i]*r**(m-i*M)
+    for j in range(len(shares1)):
+        shares1[j]=shares[int(j/M)]/M
+        dens[j]=shares1[j]/(edges1[j+1]-edges1[j])
+
+    dens.append(0.0)
+
+    dsp=openmc.stats.Tabular(edges1,dens,interpolation="histogram")
+    return dsp
+
+def mesh():
+    grid=openmc.RegularMesh()
+    grid.dimension=[1,1,NL]
+    grid.lower_left=[-7.3,-7.3,0]
+    grid.upper_right=[7.3,7.3,D]
+    filt=openmc.MeshFilter(grid)
+    return filt
+
+def tally():
+    f_grid=mesh()
+    f_col=openmc.CollisionFilter([0])
+    t=openmc.Tally(name='j1 uncollided flux')
+    t.filters=[f_grid,f_col]
+    t.scores=['flux']
+    ts=openmc.Tallies([t])
+    return ts
+
+def run(E_dis,tal,inp,batch,n_bat):
+    os.makedirs(inp,exist_ok=True)
+    mat=mater()
+    material=openmc.Materials([mat])
+    geo=geom(mat)
+    pos=openmc.stats.Point((0,0,1e-6))
+    dirn=openmc.stats.Monodirectional((0,0,1))
+    S=openmc.IndependentSource(space=pos,angle=dirn,energy=E_dis)
+
+    st=openmc.Settings()
+    st.run_mode='fixed source'
+    st.particles=n_bat
+    st.batches=batch
+    st.source=S
     
-xp1=openmc.XPlane(x0=7.3,boundary_type='reflective')
-xp2=openmc.XPlane(x0=-7.3,boundary_type='reflective')
-yp1=openmc.YPlane(y0=7.3,boundary_type='reflective')
-yp2=openmc.YPlane(y0=-7.3,boundary_type='reflective')
-zp1=openmc.ZPlane(z0=D,boundary_type='vacuum')
-zp2=openmc.ZPlane(z0=0,boundary_type='vacuum')
+    path2=os.path.join(inp,'materials.xml')
+    path3=os.path.join(inp,'geometry.xml')
+    path4=os.path.join(inp,'settings.xml')
+    path5=os.path.join(inp,'tallies.xml')
+    material.export_to_xml(path2)
+    geo.export_to_xml(path3)
+    st.export_to_xml(path4)
+    tal.export_to_xml(path5)
+    
+    openmc.run(cwd=inp)
+    path6=os.path.join(inp,'statepoint.'+str(batch)+'.h5')
+    
+    return path6
 
-bou=-xp1&+xp2&-yp1&+yp2&-zp1&+zp2
+def tallies(path,name1):
+    with openmc.StatePoint(path)as sp:
+        t2=sp.get_tally(name=name1)
+        m=t2.mean
+        s=t2.std_dev
+        m1=m.flatten()
+        m2=m1.tolist()
+        s1=s.flatten()
+        s2=s1.tolist()
+    return m2,s2
 
-c=openmc.Cell(fill=soft,region=bou)
-geo=openmc.Geometry([c])
-path3=os.path.join(path1,'geometry.xml')
-geo.export_to_xml(path3)
+if __name__ == "__main__":
+    run_as1=True
+    run_Tru=False
+    if run_as1==True:
+        E_dis=openmc.stats.Discrete([37.2],[1.0])
+        tal1=tally()
+        path2=os.path.join(path1,"j1")
+        os.makedirs(path2,exist_ok=True)
+        path3=run(E_dis,tal1,path2,batch=100,n_bat=1000)
+        m,s=tallies(path3,'j1 uncollided flux')
+        dirc={
+            "flux0_mean":m,
+            "flux0_se":s,
+            "batches":100,
+            "particles":1000
+        }
+        path3=os.path.join(OUT_DIR,"openmc_j1.json")
+        with open(path3,"w") as f:
+                json.dump(dirc,f)
+        
 
-edges,shares=kur_table()
 
-M=50
-edges1=[0.0]*((len(edges)-1)*M+1)
-shares1=[0.0]*(len(shares)*M)
-dens=[0.0]*(len(shares)*M)
-edges1[0]=edges[0]
-for i in range(len(edges)-1):
-    r=(edges[i+1]/edges[i])**(1/M)
-    for m in range(i*M+1,(i+1)*M+1):
-        edges1[m]=edges[i]*r**(m-i*M)
-for j in range(len(shares1)):
-    shares1[j]=shares[int(j/M)]/M
-    dens[j]=shares1[j]/(edges1[j+1]-edges1[j])
 
-dens.append(0.0)
-
-dsp=openmc.stats.Tabular(edges1,dens,interpolation="histogram")
-
-pos=openmc.stats.Point((0,0,1e-6))
-dirn=openmc.stats.Monodirectional((0,0,1))
-S=openmc.IndependentSource(space=pos,angle=dirn,energy=dsp)
-
-st=openmc.Settings()
-st.run_mode='fixed source'
-st.particles=1000
-st.batches=100
-st.source=S
-path4=os.path.join(path1,'settings.xml')
-st.export_to_xml(path4)
-
+    
