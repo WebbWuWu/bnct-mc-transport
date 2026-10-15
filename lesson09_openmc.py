@@ -5,6 +5,16 @@ import math
 import json
 import numpy as np
 
+KUR_TALLIES=[
+    ("kur flux",[],"flux"),
+    ("kur B10 n,a",["B10"],"(n,a)"),
+    ("kur N14 n,p",["N14"],"(n,p)"),
+    ("kur n,gamma",[],"(n,gamma)"),
+    ("kur H1 heating",["H1"],"heating"),
+    ("kur C12 heating",["C12"],"heating"),
+    ("kur O16 heating",["O16"],"heating")
+]
+
 openmc.config['cross_sections']="/mnt/e/BNCT_GPU/lib80x_hdf5/cross_sections.xml"
 path1=os.path.join(OUT_DIR,'openmc')
 os.makedirs(path1,exist_ok=True)
@@ -70,6 +80,21 @@ def tally():
     t.scores=['flux']
     ts=openmc.Tallies([t])
     return ts
+
+def tru_tally():
+    fil=mesh()
+    ts=openmc.Tallies()
+    for a,b,c in KUR_TALLIES:
+        t_a=openmc.Tally(name=a)
+        t_a.filters=[fil]
+        if len(b)!=0:
+            t_a.nuclides=b
+        t_a.scores=[c]
+        ts.append(t_a)
+    return ts
+            
+        
+        
 
 def run(E_dis,tal,inp,batch,n_bat):
     os.makedirs(inp,exist_ok=True)
