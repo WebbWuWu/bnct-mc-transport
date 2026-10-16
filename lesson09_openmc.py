@@ -93,12 +93,8 @@ def tru_tally():
         ts.append(t_a)
     return ts
             
-        
-        
-
-def run(E_dis,tal,inp,batch,n_bat):
+def run(E_dis,tal,inp,batch,n_bat,mat,seed=1):
     os.makedirs(inp,exist_ok=True)
-    mat=mater()
     material=openmc.Materials([mat])
     geo=geom(mat)
     pos=openmc.stats.Point((0,0,1e-6))
@@ -109,6 +105,7 @@ def run(E_dis,tal,inp,batch,n_bat):
     st.run_mode='fixed source'
     st.particles=n_bat
     st.batches=batch
+    st.seed=seed
     st.source=S
     
     path2=os.path.join(inp,'materials.xml')
@@ -137,14 +134,70 @@ def tallies(path,name1):
     return m2,s2
 
 if __name__ == "__main__":
-    run_as1=True
+    run_as1=False
     run_Tru=False
+    run_Tru2=False
+    run_Sab=True
+    if run_Tru==True:
+        disp=kur()
+        tal2=tru_tally()
+        path4=os.path.join(path1,"kur")
+        os.makedirs(path4,exist_ok=True)
+        mat=mater()
+        stat_path=run(disp,tal2,path4,batch=100,n_bat=10000,mat=mat)
+        dirc3={}
+        for a,b,c in KUR_TALLIES:
+            m,s=tallies(stat_path,a)
+            dirc3[a]={"mean":m,"se":s}
+        dirc3["batches"]=100
+        dirc3["particles"]=10000
+        path7=os.path.join(OUT_DIR,"openmc_kur.json")
+        with open(path7,"w") as f:
+            json.dump(dirc3,f)
+    
+    if run_Sab==True:
+        for seeds in [3,4]:
+            disp=kur()
+            tal2=tru_tally()
+            path4=os.path.join(path1,"kur_sab%d"%seeds)
+            os.makedirs(path4,exist_ok=True)
+            mat=mater()
+            mat.add_s_alpha_beta("c_H_in_H2O")
+            stat_path=run(disp,tal2,path4,batch=100,n_bat=10000,seed=seeds,mat=mat)
+            dirc3={}
+            for a,b,c in KUR_TALLIES:
+                m,s=tallies(stat_path,a)
+                dirc3[a]={"mean":m,"se":s}
+            dirc3["batches"]=100
+            dirc3["particles"]=10000
+            path7=os.path.join(OUT_DIR,"openmc_kur_sab%d.json"%seeds)
+            with open(path7,"w") as f:
+                json.dump(dirc3,f)
+            
+    if run_Tru2==True:
+        disp=kur()
+        tal2=tru_tally()
+        path4=os.path.join(path1,"kur_s2")
+        os.makedirs(path4,exist_ok=True)
+        mat=mater()
+        stat_path=run(disp,tal2,path4,batch=100,n_bat=10000,seed=2,mat=mat)
+        dirc3={}
+        for a,b,c in KUR_TALLIES:
+            m,s=tallies(stat_path,a)
+            dirc3[a]={"mean":m,"se":s}
+        dirc3["batches"]=100
+        dirc3["particles"]=10000
+        path7=os.path.join(OUT_DIR,"openmc_kur_s2.json")
+        with open(path7,"w") as f:
+            json.dump(dirc3,f)
+                
     if run_as1==True:
-        E_dis=openmc.stats.Discrete([37.2],[1.0])
         tal1=tally()
+        E_dis=openmc.stats.Discrete([37.2],[1.0])
         path2=os.path.join(path1,"j1")
         os.makedirs(path2,exist_ok=True)
-        path3=run(E_dis,tal1,path2,batch=100,n_bat=1000)
+        mat=mater()
+        path3=run(E_dis,tal1,path2,batch=100,n_bat=1000,mat=mat)
         m,s=tallies(path3,'j1 uncollided flux')
         dirc={
             "flux0_mean":m,
@@ -152,8 +205,8 @@ if __name__ == "__main__":
             "batches":100,
             "particles":1000
         }
-        path3=os.path.join(OUT_DIR,"openmc_j1.json")
-        with open(path3,"w") as f:
+        path4=os.path.join(OUT_DIR,"openmc_j1.json")
+        with open(path4,"w") as f:
                 json.dump(dirc,f)
         
 
