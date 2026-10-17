@@ -257,6 +257,12 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
     ag_sq=[0.0]*NL
     DH_sum=[0.0]*NL
     DH_sq=[0.0]*NL
+    sigma_x={}
+    sigma_x2={}
+    for i in range(len(nuclides)):
+        name=nuclides[i]["name"]
+        sigma_x[name]=[0.0]*NL
+        sigma_x2[name]=[0.0]*NL
     v_sum=v_sq=0.0
     tol_sigt_all=0.0
     for i in range(N):
@@ -277,6 +283,10 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
         N_ar=[0.0]*NL
         a_g=[0.0]*NL
         D_H=[0.0]*NL
+        d_his={}
+        for i in range(len(nuclides)):
+            name=nuclides[i]["name"]
+            d_his[name]=[0.0]*NL
         n_hist=0
         for step in range(Max):
             sig_ds=[]
@@ -456,6 +466,8 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
                     E,u,v,w=free_gas_kinematics(E,u,v,w,A,kT,x1,mu_T,rng)
                 k_hit=int(z/dz)
                 D_H[k_hit]+=wt*(E_be-E)
+                nam=nuclides[jn]["name"]
+                d_his[nam][k_hit]+=wt*(E_be-E)
             else:
                 n_A+=1
                 n_i+=1
@@ -467,6 +479,10 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
             else:
                 n_stuck+=1
         for j in range(NL):
+            for m in range(len(nuclides)):
+                name=nuclides[m]["name"]
+                sigma_x[name][j]+=d_his[name][j]
+                sigma_x2[name][j]+=d_his[name][j]**2
             track_sum[j]+=track_h[j]
             track_sq[j]+=track_h[j]**2
             Br_sum[j]+=B_r[j]
@@ -527,6 +543,8 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
         "nt_w": nt_w,               # 透射权重和
         "nr_w": nr_w,               # 反射权重和
         "n_ki": n_ki,               # 轮盘赌杀掉的条数
+        "sigma_x":sigma_x,
+        "sigma_x2":sigma_x2
     }
 
 
