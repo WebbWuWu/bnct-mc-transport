@@ -157,7 +157,7 @@ if __name__ == "__main__":
         print("name=%s,mts=%s"%(nuc["name"],nuc["mts"]))
     # 3. 文件名 stem = OUT_DIR 下的 "dose_N{N}_s{SEED}"；json 已存在 → load_result；不存在 → run_slab → save_result
     #    run_slab 参数：隐式、D、NL、z_src=0.0、src=(edges, shares)
-    stem=os.path.join(OUT_DIR,"dose_N%d_s%d"%(N,SEED))
+    stem=os.path.join(OUT_DIR,"dose_N%d_s%d_nuc"%(N,SEED))   # 10/17 Claude 改（用户定第 2 问甲）：加 _nuc，和 D_H 按核素分开前的旧结果并存
     if os.path.exists(stem + ".json"):
         r=load_result(stem)
     else:
