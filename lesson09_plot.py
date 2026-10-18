@@ -176,6 +176,10 @@ ax2.legend(fontsize=8)
 ax2.set_xlabel("Depth (cm)")
 ax1.set_ylabel("Dose per unit fluence (Gy cm^2)")
 ax1.set_title("KUR beam, soft tissue: this code vs OpenMC")
+ax2.set_title(
+    "2 D_H(H1) points below 0.7 not shown: 11.75 cm (0.57), 14.25 cm (0.58)",
+    fontsize=8
+    )
 fig.tight_layout()
 ax2.set_ylabel("this code / OpenMC")
 fig.savefig(save_path,dpi=150)
