@@ -3,10 +3,12 @@
 一个从零手写的蒙特卡罗中子输运程序。
 
 最终目标是 **GPU 加速的 BNCT 剂量计算引擎**；本仓库当前处于 **Python 参考实现阶段**，
-之后重写为 C++ 并移植到 CUDA，再与 OpenMC 对拍。
+Python 版已与 OpenMC 逐层对拍（第 9 课），之后重写为 C++ 并移植到 CUDA。
 
-> **这个仓库里的每一行代码都是我自己敲的。** 提交历史就是开发过程本身，
-> 包括每一次踩坑和修正。没有代码生成器写的部分。
+> **程序本体的代码行由我自己敲**（随机数、抽样、截面、输运、打分、剂量、OpenMC 输入、出图）。
+> 部分文件起步时由 AI 助手给出框架 —— 文件头注释、函数签名、步骤注释或填空脚手架（文件名带 `scaffold` 或文件头注明），函数体由我写。
+> 判据脚本（`lesson0X_check*.py`）、抄写稿（`copy_*.py`）和 `lesson08_dose.py` 的物理常数块由 AI 助手写，判据的门槛由我定；这些提交都标了 Co-Authored-By。
+> 提交历史就是开发过程本身，包括每一次踩坑和修正。
 
 ---
 
@@ -172,6 +174,55 @@ B-10 共 58 个反应道，其中 `redundant=1` 的 10 个（MT=4/103/105/107/20
 1. 每种元素只取主同位素（H-1 99.98% / C-12 98.9% / N-14 99.6% / O-16 99.8%），误差 ~1%；
 2. 略去 Na/P/S/Cl/K 共 1.3% 质量且**未重新归一化**，Σt 因此偏低约 1%。
 
+### 第 9 课：和 OpenMC 对拍（🏁 里程碑 1）
+
+到第 8 课为止，所有判据都是「程序 vs 纸上公式」或「程序的两种模式互相比」。
+第 9 课第一次拿**别人的程序**作对照：把第 8 课的 BNCT 问题原样交给 OpenMC 0.15.3 再算一遍，逐层比。
+
+**同一个问题**（两边逐项对齐）：15 cm ICRU-44 软组织平板（H/C/N/O 主同位素 + B-10 15 ppm，ρ = 1.06 g/cm³，294 K），30 层 × 0.5 cm；
+KUR 超热束三群谱（Fujiwara 2013 表 1）从表面垂直入射；两边读**同一份** ENDF/B-VIII.0 HDF5 库；热区都用自由气体模型。
+OpenMC 用三维盒子 + 侧面反射边界，等价于一维平板。
+统计量：本程序 10⁵ 历史 × 2 个种子；OpenMC 10⁶ 历史 × 10 个种子。
+
+`lesson09_openmc.py`（OpenMC 输入）· `lesson09_compare.py`（逐层比较）· `lesson09_plot.py`（出图）
+
+![本程序 vs OpenMC：D_B、D_N、D_H 深度剂量与逐层比值](outputs/lesson09_final.png)
+
+**「1σ 内重合」不是正确的判据。** 两边都对时，每层 z = (A − B)/√(SE_A² + SE_B²) 近似服从标准正态，
+落在 ±1 内的概率只有 68.3%，30 层全在 ±1 内的概率约 0.683³⁰ ≈ 1e-5。所以按比例和 χ² 判：
+约 68% 的层在 1σ 内、约 95% 在 2σ 内、没有一层超过 4σ；χ²（30 层 z² 之和）落在 χ²₃₀ 的 99% 区间 [13.79, 53.67]。
+
+| 量 | 1σ 内 | 2σ 内 | 最大 \|z\| | χ²（30 层） | 说明 |
+|---|---|---|---|---|---|
+| 通量 | 23/30 | 30/30 | 1.93 | 21.8 | |
+| D_B / D_N / (n,γ) | 24/30 | 29/30 | 2.10 | 17.2 | 三者都 ∝ 1/v，算一个独立证据 |
+| D_H（H-1） | 14/30 | 24/30 | 3.81 | 64.2（上限 96.7） | 30 层总和比 **0.977**；9–12 cm 偏低约 20% |
+| D_H（O-16） | 17/30 | 26/30 | 2.39 | 47.9（上限 76.9） | 总和比 1.100；3–6 cm 偏高约 20% |
+| D_H（C-12） | — | — | — | — | 不逐层判（见下），总和比 1.008 |
+
+**OpenMC 先验对，再拿来当对照**：单能纯吸收的假问题，OpenMC 每层通量 vs 闭式解，最大 \|z\| = **1.36**（把 Σt 故意改大 3% → **6.8**，判据会响）；
+OpenMC 抽出的源能量 vs KUR 原表，7 项全 < 4σ（故意写错一处 → **85**）。
+
+**D_H 和 OpenMC 的 `heating` 不是同一个量。** `heating` 是 KERMA，含所有反应留下的能量；
+本程序的 D_H 只记弹性反冲。所以只比 H-1、C-12、O-16 三个核素（≤ 2 MeV 时它们除了弹性只有 (n,γ)），
+并且从 H-1 的 heating 里逐层扣掉 H(n,γ) 中氘核被 γ 反冲的能量：
+E_R = E_γ²/(2M_d c²) = 2.2246²/(2 × 1875.6) MeV ≈ 1317 eV（从库里的 KERMA 量出 **1315.8 eV**）。
+这一项只占每层 0.6–3.3%，但比每层的 SE 大好几倍，不扣会判错。
+
+**判据本身的三处修正，都在看新数据之前定：**
+
+- **误差棒对，χ² 也会出界。** 10 个种子量出：OpenMC 自报的 SE 和 10 次之间实际散布之比 **0.99–1.08**（SE 是对的），
+  但 `heating` 的 30 层一起涨落（相邻层相关 ρ̄ ≈ 0.4），同一程序自比 χ² 最大到 107。所以 D_H 的 χ² 上限取「OpenMC 自比 45 对的最大值」。
+- **SE 也是估出来的。** 碰撞估计在稀有事件上会骗人：C-12 第 26 层 10 万条历史里一次快中子碰撞都没有，SE 塌成近 0，z = −69。
+  先查相对误差 R = SE/均值，**R > 0.2 的层 SE 不可信**，不拿去算 z。
+- **回归判据要最硬的那种。** 给 D_H 按核素分开后，同一个种子重跑，旧的 26 个结果**逐位相同**。
+
+**已知近似，量过的和没量过的：**
+
+- 自由气体（无 S(α,β)）：两边都关掉，对拍不受影响。OpenMC 加 S(α,β) 再跑一次量出它的大小：**D_B 峰值低估 23%，最深层高估约一倍**。
+- 弹性散射在质心系各向同性（MeV 区 O-16 实际偏前向）：本程序有、OpenMC 没有。各向同性时快中子钻不深，
+  方向和 D_H「深处 H-1 偏低、浅处 O-16 偏高」一致 —— **是首要怀疑对象，还没证明**。
+
 ### 统计模块
 
 `mcstat.py` — `mean_se` / `dev_sigma` / `row` / `header` / `chi2_uniform` / `check`。
@@ -217,7 +268,11 @@ B-10 共 58 个反应道，其中 `redundant=1` 的 10 个（MT=4/103/105/107/20
 | 第 3 课 | `lesson03_tally.py` `plot_lesson03_scaffold.py` `outputs/lesson03_N1e6.txt` |
 | 第 4 课 | `lesson04_energy.py` `specs/lesson04_spec.md` |
 | 第 5 课 | `xslib.py` `plot_xs.py` `lesson05_tissue_scaffold.py` `explore/h5_first_look.py` `explore_reactions_scaffold.py` |
-| 公共模块 | `mcstat.py` `specs/mcstat_spec.md` |
+| 第 6 课 | `lesson06_continuous.py` `xs_lookup.py` `sample_reaction.py` `sample_reaction_bisect.py` |
+| 第 7 课 | `lesson07_freegas.py`；判据（AI 助手写）`lesson07_checks.py` `lesson07_check1.py` `lesson07_check2.py` `lesson07_check4.py` |
+| 第 8 课 | `lesson08_dose.py`；判据与核数（AI 助手写）`lesson08_checks.py` `lesson08_check4.py` `lesson08_check_dose.py` `lesson08_check_src.py` `lesson08_xs_numbers.py` |
+| 第 9 课 | `lesson09_openmc.py` `lesson09_compare.py` `lesson09_plot.py`；判据（AI 助手写）`lesson09_check1.py` – `lesson09_check5.py` `lesson09_check_se.py` |
+| 公共模块 | `mcstat.py` `rng.py` `specs/mcstat_spec.md` |
 | 白板题（手写练习规格书） | `whiteboard/whiteboard_02_spec.md` `whiteboard/whiteboard_05_spec.md` `whiteboard/whiteboard_05_scaffold.py` `whiteboard_05_rewrite.py` `whiteboard/whiteboard_06_spec.md` `whiteboard/whiteboard_06_loglog.py` |
 | 工具讲义 | `docs/tool_debugger_guide.md` `docs/tool_git_guide.md` `docs/tool_matplotlib_guide.md` `specs/matplotlib_spec.md` |
 
@@ -227,9 +282,9 @@ B-10 共 58 个反应道，其中 `redundant=1` 的 10 个（MT=4/103/105/107/20
 
 | 时间 | 内容 |
 |---|---|
-| 第 6 课 | 连续能量接进 1D 平板。判据：**单能极限下与 `lesson03_tally.py` 逐位相同** |
-| 第 7–8 课 | free-gas 热化与上散射（第 5 课的 H-1 曲线已经看见它）；¹⁰B(n,α)⁷Li 与四分量剂量 |
-| **里程碑 1** | 与 OpenMC 对拍：两条深度剂量曲线在 1σ 内重合 |
+| 第 6 课 | ✅ 连续能量接进 1D 平板。判据：**单能极限下与 `lesson03_tally.py` 逐位相同** |
+| 第 7–8 课 | ✅ free-gas 热化与上散射（第 5 课的 H-1 曲线已经看见它）；¹⁰B(n,α)⁷Li 与剂量（D_B / D_N / D_H，γ 只记产额） |
+| **里程碑 1** | ✅ 2026-10-18 完成：与 OpenMC 逐层对拍，见第 9 课 |
 | 第 10–14 课 | C++ 重写 → CUDA 移植（一线程一历史，atomicAdd 打分） |
 | **里程碑 2** | 给出 GPU / CPU 单线程的真实加速比与历史数-时间曲线 |
 | 收尾 | 一维锂包层 TBR 算例（14.1 MeV 源，⁶Li(n,α)t 与 ⁷Li(n,n'α)t 两个反应道） |
