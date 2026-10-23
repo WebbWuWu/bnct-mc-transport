@@ -202,38 +202,48 @@ wt_lo=0.1
 wt_hi=0.2
 Q_val=2341569.0#核数脚本 10/9，801 份额 0.937016
 
-def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False, NL=20, src=None):
-    if z_src is None:
-        z_src=d/2
-
-    assert len(order) == len(nuclides)
-
-    for i in range(len(nuclides)):
-        assert len(order[i]) == len(nuclides[i]["XS"])
-    
-    assert t_cut is None or t_cut > 0.0, "t_cut=%r 必须是 None（不截断）或正数" % (t_cut,)
-    E_cut=[]
-    len_nuc=len(nuclides)
+def prepare_nuclides(nuclides):
+    ind_H=None
     ind_B=None
+    loca_800=None
+    loca_801=None
+    Q_800=None
+    Q_801=None
     ind_N=None
+    loca_600=None
+    Q_600=None
     ind_102=[]
-    for j in range(len_nuc):
+    for j in range(len(nuclides)):
         if nuclides[j]["name"]=="B10":
             ind_B=j
             loca_800=nuclides[j]["mts"].index(800)
             loca_801=nuclides[j]["mts"].index(801)
             Q_800=nuclides[j]["Q_value"][loca_800]
             Q_801=nuclides[j]["Q_value"][loca_801]
+        if nuclides[j]["name"]=="H1":
+            ind_H=j
         if nuclides[j]["name"]=="N14":
             ind_N=j
             loca_600=nuclides[j]["mts"].index(600)
             Q_600=nuclides[j]["Q_value"][loca_600]
         loca_102=nuclides[j]["mts"].index(102)
         ind_102.append(loca_102)
-    rng=lcg(seed)
-    if src!=None:
-        edges,shares=src
-        cdf=make_cdf(shares)
+    return {
+        "ind_H":ind_H,
+        "ind_B":ind_B,
+        "loca_800":loca_800,
+        "loca_801":loca_801,
+        "Q_800":Q_800,
+        "Q_801":Q_801,
+        "ind_N":ind_N,
+        "loca_600":loca_600,
+        "Q_600":Q_600,
+        "ind_102":ind_102
+    }
+def make_tallies(nuclides, NL):
+    """整个模拟的计数：10 个计数器、12 个逐层数组、按核素的 sigma_x / sigma_x2、总账 3 个、E_cut。
+    返回一个字典，键名 = 原来的变量名（10/23 拆分 ① 框架第 1 问 甲；Claude 从 run_slab 原样搬来，用户要求）。"""
+    E_cut=[]
     n_T=0
     n_ki=0
     n_R=0
@@ -244,7 +254,6 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
     n_i=0
     nt_cut=0
     n_sd=0
-    dz=d/NL
     track_sum=[0.0]*NL
     track_sq=[0.0]*NL
     Br_sum=[0.0]*NL
@@ -259,246 +268,89 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
     DH_sq=[0.0]*NL
     sigma_x={}
     sigma_x2={}
+    kerma_sum={}
+    kerma_sq={}
     for i in range(len(nuclides)):
         name=nuclides[i]["name"]
         sigma_x[name]=[0.0]*NL
         sigma_x2[name]=[0.0]*NL
+        kerma_sum[name]=[0.0]*NL
+        kerma_sq[name]=[0.0]*NL
+    gH_sum=[0.0]*NL
+    gH_sq=[0.0]*NL
+    gB_sum=[0.0]*NL
+    gB_sq=[0.0]*NL
     v_sum=v_sq=0.0
     tol_sigt_all=0.0
-    for i in range(N):
-        wt=1.0
-        t=0
-        z=z_src
-        if src==None:
-            E=E_src
-        else:
-            E=sample_E_table(edges,cdf,rng)
-        tol_sigt_s=0.0
-        u=0
-        v=0
-        w=1.0
-        track_h=[0.0]*NL
-        B_r=[0.0]*NL
-        B_c=[0.0]*NL
-        N_ar=[0.0]*NL
-        a_g=[0.0]*NL
-        D_H=[0.0]*NL
-        d_his={}
-        for i in range(len(nuclides)):
-            name=nuclides[i]["name"]
-            d_his[name]=[0.0]*NL
-        n_hist=0
-        for step in range(Max):
-            sig_ds=[]
-            sig_al=[]
-            tot_ls=[]
-            for j in range(len(nuclides)):
-                Sig_j,tot_j=sigma_at_ext(nuclides[j]["E"],nuclides[j]["XS"],E)
-                Sigma_j = nuclides[j]["dens"] * tot_j * BARN
-                sig_ds.append(Sig_j)
-                sig_al.append(Sigma_j)
-                tot_ls.append(tot_j) 
-            Sigma_t=sum(sig_al)
-            assert Sigma_t > 0.0, "Sigma_t 为零，飞行距离会除零：E=%.6g eV" % E
-            B_reac=0.0
-            B_con=0.0
-            N_coe=0.0
-            a_coe=0.0
-            if ind_B !=None:
-                sig800=sig_ds[ind_B][loca_800]
-                sig801=sig_ds[ind_B][loca_801]
-                tran_coe=nuclides[ind_B]["dens"]*BARN
-                B_reac=tran_coe*(sig800*Q_800+sig801*Q_801)
-                B_con=tran_coe*(sig800+sig801)*Q_val
-            if ind_N !=None:
-                sig600=sig_ds[ind_N][loca_600]
-                N_coe=nuclides[ind_N]["dens"]*BARN*sig600*Q_600
-            for j in range(len_nuc):
-                sig102=sig_ds[j][ind_102[j]]
-                a_coe+=nuclides[j]["dens"]*BARN*sig102
-            # 为什么是 1-rng.random() 而不是 rng.random()：
-            #   random() 返回 [0,1) —— 0 取得到，1 取不到。若写 -log(xi)，xi=0 时 log 收到 0 → -inf，程序炸。
-            #   取 1-xi 后 log 的参数落在 (0,1]，永远取不到 0。两种写法同分布，但安全性完全不同。
-            #   命中概率约 2^-32：跑一亿条历史大概撞一次 —— 调试时永远不出现，演示时出现。
-            #   这个选择配套的是本文件里 LCG 的区间，换 RNG 要重新核对。见 whiteboard_02_spec.md。
-            s=-math.log(1-rng.random())/Sigma_t
-            has_sign = False
-            
-            if t_cut!=None:
-                t1=s/math.sqrt(E)
-                if t+t1>t_cut:
-                    s=(t_cut-t)*math.sqrt(E)
-                    has_sign = True
-                    t=t_cut
-                else:
-                    t+=t1
-            z0=z
-            z1=z0+s*w
-            if z1>d:
-                z_end=d
-            elif z1<0:
-                z_end=0.0
-            else:
-                z_end=z1
-            assert 0.0 <= z0 <= d, "z0 跑出板外了: %.15f" % z0
-            seg = 0.0                                  # 本段实际记了多少
-            if w == 0.0:
-                k0 = int(z0 / dz)
-                assert 0 <= k0 < NL, "层号越界: k0=%d z0=%.9f" % (k0, z0)
-                track_h[k0] += s*wt
-                B_r[k0]+=wt*s*B_reac
-                B_c[k0]+=wt*s*B_con
-                N_ar[k0]+=wt*s*N_coe
-                a_g[k0]+=wt*s*a_coe
-                seg    += s
-                expect  = s
+    return {
+        "E_cut":E_cut,
+        "n_T":n_T,
+        "n_ki":n_ki,
+        "n_R":n_R,
+        "n_A":n_A,
+        "nt_w":nt_w,
+        "nr_w":nr_w,
+        "n_stuck":n_stuck,
+        "n_i":n_i,
+        "nt_cut":nt_cut,
+        "n_sd":n_sd,
+        "track_sum":track_sum,
+        "track_sq":track_sq,
+        "Br_sum":Br_sum,
+        "Br_sq":Br_sq,
+        "Bc_sum":Bc_sum,
+        "Bc_sq":Bc_sq,
+        "Nc_sum":Nc_sum,
+        "Nc_sq":Nc_sq,
+        "ag_sum":ag_sum,
+        "ag_sq":ag_sq,
+        "DH_sum":DH_sum,
+        "DH_sq":DH_sq,
+        "sigma_x":sigma_x,
+        "sigma_x2":sigma_x2,
+        "v_sum":v_sum,
+        "v_sq":v_sq,
+        "kerma_sum":kerma_sum,
+        "kerma_sq":kerma_sq,
+        "gH_sum":gH_sum,
+        "gH_sq":gH_sq,
+        "gB_sum":gB_sum,
+        "gB_sq":gB_sq,
+        "tol_sigt_all":tol_sigt_all,
+    }
 
-            else:
-                k0 = int(z0 / dz)                      # 起点层
-                k1 = int(z_end / dz)                   # 终点层
-                if k1 >= NL:                           # z_end 恰好 == d 时夹一下
-                    k1 = NL - 1
-
-                cur = z0                               # 笔尖当前位置
-                k   = k0                               # 笔尖当前层
-                guard=0
-                while True:
-                    guard+=1
-                    assert guard<=NL+2,\
-                        "拆层循环未退出"
-                    # ① 这一步走到哪：当前层的出口边界 vs z_end，取近的那个
-                    #    w>0 出口是 (k+1)*dz ；w<0 出口是 k*dz
-                    if w>0:
-                        k_o=(k+1)*dz
-                        z_step=min(k_o,z_end)
-                    else:
-                        k_o=k*dz
-                        z_step=max(k_o,z_end)
-                    # ② 记账：dz_step = abs(这一步终点 - cur)
-                    #         track_h[k] += dz_step / abs(w)
-                    #         seg        += 同一个值
-                    #         记账前先 assert 0 <= k < NL
-                    assert 0<=k<NL,\
-                        "k越界"
-                    dz_step=abs(z_step-cur)
-                    track_h[k] += wt*dz_step / abs(w)
-                    B_r[k]+=wt*dz_step / abs(w)*B_reac
-                    B_c[k]+=wt*dz_step / abs(w)*B_con
-                    N_ar[k]+=wt*dz_step / abs(w)*N_coe
-                    a_g[k]+=wt*dz_step / abs(w)*a_coe
-                    seg+=dz_step/abs(w)
-                    # ③ cur = 这一步的终点
-                    cur=z_step
-                    # ④ 到 k1 了就 break，否则 k += 1（w>0）或 k -= 1（w<0）
-                    if k==k1:
-                        break
-                    if w > 0:
-                        k += 1
-                    else:
-                        k -= 1
-
-                expect = abs(z_end - z0) / abs(w)
-
-            assert math.isclose(seg, expect, rel_tol=1e-9, abs_tol=1e-12), \
-                "段记账不守恒: seg=%.15f expect=%.15f z0=%.6f z_end=%.6f w=%.9f" \
-                % (seg, expect, z0, z_end, w)
-            tol_sigt_s += Sigma_t * seg
-            z = z1                                     
-            if z<0:
-                n_R+=1
-                nr_w+=wt
-                break
-            if z>d:
-                n_T+=1
-                nt_w+=wt
-                break
-            if has_sign ==True:
-                nt_cut+=1
-                E_cut.append(E)
-                break
-            share2=[0.0]*len(nuclides)
-            si=[0.0]*len(nuclides)
-            sig_s=[0.0]*len(nuclides)
-            for j in range(len(nuclides)):
-                si[j]=sig_al[j]/Sigma_t
-                pl=nuclides[j]["mts"].index(2)
-                sig_s[j]=sig_ds[j][pl]*nuclides[j]["dens"]*BARN
-            sigma_s=sum(sig_s)
-            for j in range(len(nuclides)):
-                share2[j]=sig_s[j]/sigma_s
-            if implicit==False:
-                if len_nuc==1:
-                    jn=0
-                else:
-                    xi1=rng.random()
-                    tot=make_cdf(si)
-                    jn=find_cell(tot,xi1)
-                xi=rng.random()
-                k=sample_reaction(sig_ds[jn],tot_ls[jn],xi,order[jn])
-                is_scat=nuclides[jn]["mts"][k]==2
-            else:
-                wt=wt*sigma_s/Sigma_t
-                if wt<wt_lo:
-                    xi4=rng.random()
-                    if xi4<wt/wt_hi:
-                        wt=wt_hi
-                    else:
-                        n_ki+=1
-                        break
-                if len_nuc==1:
-                    jn=0
-                else:
-                    cdf2=make_cdf(share2)
-                    xi3=rng.random()
-                    jn=find_cell(cdf2,xi3)
-                is_scat=True
-            if is_scat:
-                n_i+=1
-                n_hist+=1
-                E_be=E
-                if nuclides[jn]["awr"] is None:
-                    u,v,w=isotropic_direction(rng)
-                else:
-                    A=nuclides[jn]["awr"]
-                    kT=nuclides[jn]["kT"]
-                    y=math.sqrt(E*A/kT)
-                    x1,mu_T,k2=sample_target(y,rng)
-                    E,u,v,w=free_gas_kinematics(E,u,v,w,A,kT,x1,mu_T,rng)
-                k_hit=int(z/dz)
-                D_H[k_hit]+=wt*(E_be-E)
-                nam=nuclides[jn]["name"]
-                d_his[nam][k_hit]+=wt*(E_be-E)
-            else:
-                n_A+=1
-                n_i+=1
-                n_hist+=1
-                break
-        else:
-            if t_cut==None:
-                n_sd+=1
-            else:
-                n_stuck+=1
-        for j in range(NL):
-            for m in range(len(nuclides)):
-                name=nuclides[m]["name"]
-                sigma_x[name][j]+=d_his[name][j]
-                sigma_x2[name][j]+=d_his[name][j]**2
-            track_sum[j]+=track_h[j]
-            track_sq[j]+=track_h[j]**2
-            Br_sum[j]+=B_r[j]
-            Br_sq[j]+=B_r[j]**2
-            Bc_sum[j]+=B_c[j]
-            Bc_sq[j]+=B_c[j]**2
-            Nc_sum[j]+=N_ar[j]
-            Nc_sq[j]+=N_ar[j]**2
-            ag_sum[j]+=a_g[j]
-            ag_sq[j]+=a_g[j]**2
-            DH_sum[j]+=D_H[j]
-            DH_sq[j]+=D_H[j]**2
-        x = tol_sigt_s - n_hist
-        tol_sigt_all += tol_sigt_s
-        v_sum+=x
-        v_sq+=x**2
+def finish(tal, N, dz):
+    """收尾：撞满警告 + 三条总账 assert + 拼 28 个键的返回字典（run_slab 对外的说明书）。
+    10/23 拆分 ① 框架第 3 问 甲；Claude 从 run_slab 原样搬来（用户要求）。"""
+    # ---- 10/23 拆分 ① C（Claude 搬运，用户要求）：计数字典里的 28 样取回原名，下面的总账 assert、返回字典是 run_slab 原来的结尾，一字未改 ----
+    E_cut=tal["E_cut"]
+    n_T=tal["n_T"]
+    n_ki=tal["n_ki"]
+    n_R=tal["n_R"]
+    n_A=tal["n_A"]
+    nt_w=tal["nt_w"]
+    nr_w=tal["nr_w"]
+    n_stuck=tal["n_stuck"]
+    n_i=tal["n_i"]
+    nt_cut=tal["nt_cut"]
+    n_sd=tal["n_sd"]
+    track_sum=tal["track_sum"]
+    track_sq=tal["track_sq"]
+    Br_sum=tal["Br_sum"]
+    Br_sq=tal["Br_sq"]
+    Bc_sum=tal["Bc_sum"]
+    Bc_sq=tal["Bc_sq"]
+    Nc_sum=tal["Nc_sum"]
+    Nc_sq=tal["Nc_sq"]
+    ag_sum=tal["ag_sum"]
+    ag_sq=tal["ag_sq"]
+    DH_sum=tal["DH_sum"]
+    DH_sq=tal["DH_sq"]
+    sigma_x=tal["sigma_x"]
+    sigma_x2=tal["sigma_x2"]
+    v_sum=tal["v_sum"]
+    v_sq=tal["v_sq"]
+    tol_sigt_all=tal["tol_sigt_all"]
     if n_stuck>0:
         print("warning!有%d条历史触顶max_event"% n_stuck)
     scale = abs(tol_sigt_all) + abs(n_i)
@@ -544,8 +396,375 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
         "nr_w": nr_w,               # 反射权重和
         "n_ki": n_ki,               # 轮盘赌杀掉的条数
         "sigma_x":sigma_x,
-        "sigma_x2":sigma_x2
+        "sigma_x2":sigma_x2,
+        "kerma_sum":tal["kerma_sum"],
+        "kerma_sq":tal["kerma_sq"],
+        "gH_sum":tal["gH_sum"],
+        "gH_sq":tal["gH_sq"],
+        "gB_sum":tal["gB_sum"],
+        "gB_sq":tal["gB_sq"],
     }
+
+# ============================================================
+#  10/23 拆分 ②（Claude 搬运，用户要求「直接拆完」）：历史循环拆成 5 个小函数。
+#  每一行都是从原 run_slab 历史循环里原样搬来的，只是把名字换成从两个小字典里取：
+#    p     粒子状态（这条中子现在在哪、往哪飞、多少能量、多少权重、走了多久）：z u v w E wt t
+#    hist  这条历史自己的计数（每条历史开头清零，纪律 6）：track_h B_r B_c N_ar a_g D_H d_his n_hist tol_sigt_s
+#  规矩（和拆分 ① 一样）：idx 只读；tal、hist、p 在函数里「改」，不「换」。
+#  随机数调用的先后顺序一个都没动 —— check_split.py 逐位回归守着它。
+# ============================================================
+
+def start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng):
+    """一条新历史：粒子从源出发（p），这条历史的计数全部清零（hist）。原历史循环第 1–22 行。"""
+    wt=1.0
+    t=0
+    z=z_src
+    if src==None:
+        E=E_src
+    else:
+        E=sample_E_table(edges,cdf,rng)
+    tol_sigt_s=0.0
+    u=0
+    v=0
+    w=1.0
+    track_h=[0.0]*NL
+    B_r=[0.0]*NL
+    B_c=[0.0]*NL
+    N_ar=[0.0]*NL
+    a_g=[0.0]*NL
+    D_H=[0.0]*NL
+    gH_h=[0.0]*NL
+    gB_h=[0.0]*NL
+    d_his={}
+    kerma_h={}
+    for m in range(len(nuclides)):           # 原来这里用的是 i，和外层历史循环的 i 同名（10/17 挂着的那条）；挪进函数后改成 m，结果不变
+        name=nuclides[m]["name"]
+        d_his[name]=[0.0]*NL
+        kerma_h[name]=[0.0]*NL
+    n_hist=0
+    p={"z":z, "u":u, "v":v, "w":w, "E":E, "wt":wt, "t":t}
+    hist={"track_h":track_h, "B_r":B_r, "B_c":B_c, "N_ar":N_ar, "a_g":a_g, "D_H":D_H,
+          "d_his":d_his, "n_hist":n_hist, "tol_sigt_s":tol_sigt_s,"kerma_h":kerma_h
+          ,"gH_h":gH_h,"gB_h":gB_h}
+    return p, hist
+
+
+def lookup_xs(nuclides, idx, E):
+    """在能量 E 处查好这一步要用的所有截面和「每 cm 记多少」的系数。飞行中 E 不变，所以每步查一次。
+    M2 的 kerma 系数（Σ N_i·H_i(E)）以后就加在这里。原历史循环每步第 1–28 行。"""
+    sig_ds=[]
+    sig_al=[]
+    tot_ls=[]
+    kerco={}
+    for j in range(len(nuclides)):
+        Sig_j,tot_j=sigma_at_ext(nuclides[j]["E"],nuclides[j]["XS"],E)
+        Sigma_j = nuclides[j]["dens"] * tot_j * BARN
+        sig_ds.append(Sig_j)
+        sig_al.append(Sigma_j)
+        tot_ls.append(tot_j)
+        _,heat=sigma_at_ext(nuclides[j]["E"],[nuclides[j]["heat"]],E)
+        ker_coe=nuclides[j]["dens"]*BARN*heat
+        kerco[nuclides[j]["name"]]=ker_coe
+    Sigma_t=sum(sig_al)
+    assert Sigma_t > 0.0, "Sigma_t 为零，飞行距离会除零：E=%.6g eV" % E
+    B_reac=0.0
+    B_con=0.0
+    N_coe=0.0
+    a_coe=0.0
+    gB_coe=0.0
+    gH_coe=0.0
+    if idx["ind_B"] !=None:
+        sig800=sig_ds[idx["ind_B"]][idx["loca_800"]]
+        sig801=sig_ds[idx["ind_B"]][idx["loca_801"]]
+        tran_coe=nuclides[idx["ind_B"]]["dens"]*BARN
+        B_reac=tran_coe*(sig800*idx["Q_800"]+sig801*idx["Q_801"])
+        B_con=tran_coe*(sig800+sig801)*Q_val
+        gB_coe=tran_coe*sig801
+    if idx["ind_H"] !=None:
+        sigH1=sig_ds[idx["ind_H"]][idx["ind_102"][idx["ind_H"]]]
+        gH_coe=nuclides[idx["ind_H"]]["dens"]*BARN*sigH1
+    if idx["ind_N"] !=None:
+        sig600=sig_ds[idx["ind_N"]][idx["loca_600"]]
+        N_coe=nuclides[idx["ind_N"]]["dens"]*BARN*sig600*idx["Q_600"]
+    for j in range(len(nuclides)):
+        sig102=sig_ds[j][idx["ind_102"][j]]
+        a_coe+=nuclides[j]["dens"]*BARN*sig102
+    return {"sig_ds":sig_ds, "sig_al":sig_al, "tot_ls":tot_ls, "Sigma_t":Sigma_t,
+            "B_reac":B_reac, "B_con":B_con, "N_coe":N_coe, "a_coe":a_coe,
+            "kerco":kerco,"gH_coe":gH_coe,"gB_coe":gB_coe}
+
+
+def fly(p, xs, hist, rng, d, dz, NL, t_cut):
+    """飞一段：抽飞行距离 → 时间截断 → 这一段按层拆开记账（径迹长度估计）→ 更新位置。
+    改 p（z、t）和 hist；返回这一段是不是被时间截断了（原来的 has_sign）。
+    M5 三维只改这一个函数。原历史循环每步第 29–111 行。"""
+    E=p["E"]
+    w=p["w"]
+    wt=p["wt"]
+    z=p["z"]
+    t=p["t"]
+    Sigma_t=xs["Sigma_t"]
+    B_reac=xs["B_reac"]
+    B_con=xs["B_con"]
+    N_coe=xs["N_coe"]
+    a_coe=xs["a_coe"]
+    track_h=hist["track_h"]
+    B_r=hist["B_r"]
+    B_c=hist["B_c"]
+    N_ar=hist["N_ar"]
+    a_g=hist["a_g"]
+    # 为什么是 1-rng.random() 而不是 rng.random()：
+    #   random() 返回 [0,1) —— 0 取得到，1 取不到。若写 -log(xi)，xi=0 时 log 收到 0 → -inf，程序炸。
+    #   取 1-xi 后 log 的参数落在 (0,1]，永远取不到 0。两种写法同分布，但安全性完全不同。
+    #   命中概率约 2^-32：跑一亿条历史大概撞一次 —— 调试时永远不出现，演示时出现。
+    #   这个选择配套的是本文件里 LCG 的区间，换 RNG 要重新核对。见 whiteboard_02_spec.md。
+    s=-math.log(1-rng.random())/Sigma_t
+    has_sign = False
+
+    if t_cut!=None:
+        t1=s/math.sqrt(E)
+        if t+t1>t_cut:
+            s=(t_cut-t)*math.sqrt(E)
+            has_sign = True
+            t=t_cut
+        else:
+            t+=t1
+    z0=z
+    z1=z0+s*w
+    if z1>d:
+        z_end=d
+    elif z1<0:
+        z_end=0.0
+    else:
+        z_end=z1
+    assert 0.0 <= z0 <= d, "z0 跑出板外了: %.15f" % z0
+    seg = 0.0                                  # 本段实际记了多少
+    if w == 0.0:
+        k0 = int(z0 / dz)
+        assert 0 <= k0 < NL, "层号越界: k0=%d z0=%.9f" % (k0, z0)
+        track_h[k0] += s*wt
+        B_r[k0]+=wt*s*B_reac
+        B_c[k0]+=wt*s*B_con
+        N_ar[k0]+=wt*s*N_coe
+        a_g[k0]+=wt*s*a_coe
+        seg    += s
+        expect  = s
+
+    else:
+        k0 = int(z0 / dz)                      # 起点层
+        k1 = int(z_end / dz)                   # 终点层
+        if k1 >= NL:                           # z_end 恰好 == d 时夹一下
+            k1 = NL - 1
+
+        cur = z0                               # 笔尖当前位置
+        k   = k0                               # 笔尖当前层
+        guard=0
+        while True:
+            guard+=1
+            assert guard<=NL+2,\
+                "拆层循环未退出"
+            # ① 这一步走到哪：当前层的出口边界 vs z_end，取近的那个
+            #    w>0 出口是 (k+1)*dz ；w<0 出口是 k*dz
+            if w>0:
+                k_o=(k+1)*dz
+                z_step=min(k_o,z_end)
+            else:
+                k_o=k*dz
+                z_step=max(k_o,z_end)
+            # ② 记账：dz_step = abs(这一步终点 - cur)
+            #         track_h[k] += dz_step / abs(w)
+            #         seg        += 同一个值
+            #         记账前先 assert 0 <= k < NL
+            assert 0<=k<NL,\
+                "k越界"
+            dz_step=abs(z_step-cur)
+            track_h[k] += wt*dz_step / abs(w)
+            B_r[k]+=wt*dz_step / abs(w)*B_reac
+            B_c[k]+=wt*dz_step / abs(w)*B_con
+            N_ar[k]+=wt*dz_step / abs(w)*N_coe
+            a_g[k]+=wt*dz_step / abs(w)*a_coe
+            seg+=dz_step/abs(w)
+            # ③ cur = 这一步的终点
+            cur=z_step
+            # ④ 到 k1 了就 break，否则 k += 1（w>0）或 k -= 1（w<0）
+            if k==k1:
+                break
+            if w > 0:
+                k += 1
+            else:
+                k -= 1
+
+        expect = abs(z_end - z0) / abs(w)
+
+    assert math.isclose(seg, expect, rel_tol=1e-9, abs_tol=1e-12), \
+        "段记账不守恒: seg=%.15f expect=%.15f z0=%.6f z_end=%.6f w=%.9f" \
+        % (seg, expect, z0, z_end, w)
+    hist["tol_sigt_s"] += Sigma_t * seg
+    p["z"] = z1
+    p["t"] = t
+    return has_sign
+
+
+def collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz):
+    """撞一下：抽核素 → 抽道（模拟）或减权重 + 轮盘赌（隐式）→ 散射（改 E、方向，记 D_H）或吸收。
+    改 p（E、u、v、w、wt）、hist、tal；返回这条中子还活着没有（False = 吸收或被轮盘赌杀掉，历史结束）。
+    M3 的 S(α,β)、真实角分布都改在这里。原历史循环每步第 129–184 行。"""
+    E=p["E"]
+    u=p["u"]
+    v=p["v"]
+    w=p["w"]
+    wt=p["wt"]
+    z=p["z"]
+    sig_ds=xs["sig_ds"]
+    sig_al=xs["sig_al"]
+    tot_ls=xs["tot_ls"]
+    Sigma_t=xs["Sigma_t"]
+    len_nuc=len(nuclides)
+    share2=[0.0]*len(nuclides)
+    si=[0.0]*len(nuclides)
+    sig_s=[0.0]*len(nuclides)
+    for j in range(len(nuclides)):
+        si[j]=sig_al[j]/Sigma_t
+        pl=nuclides[j]["mts"].index(2)
+        sig_s[j]=sig_ds[j][pl]*nuclides[j]["dens"]*BARN
+    sigma_s=sum(sig_s)
+    for j in range(len(nuclides)):
+        share2[j]=sig_s[j]/sigma_s
+    if implicit==False:
+        if len_nuc==1:
+            jn=0
+        else:
+            xi1=rng.random()
+            tot=make_cdf(si)
+            jn=find_cell(tot,xi1)
+        xi=rng.random()
+        k=sample_reaction(sig_ds[jn],tot_ls[jn],xi,order[jn])
+        is_scat=nuclides[jn]["mts"][k]==2
+    else:
+        wt=wt*sigma_s/Sigma_t
+        if wt<wt_lo:
+            xi4=rng.random()
+            if xi4<wt/wt_hi:
+                wt=wt_hi
+            else:
+                tal["n_ki"]+=1
+                p["wt"]=wt
+                return False
+        if len_nuc==1:
+            jn=0
+        else:
+            cdf2=make_cdf(share2)
+            xi3=rng.random()
+            jn=find_cell(cdf2,xi3)
+        is_scat=True
+    p["wt"]=wt
+    if is_scat:
+        tal["n_i"]+=1
+        hist["n_hist"]+=1
+        E_be=E
+        if nuclides[jn]["awr"] is None:
+            u,v,w=isotropic_direction(rng)
+        else:
+            A=nuclides[jn]["awr"]
+            kT=nuclides[jn]["kT"]
+            y=math.sqrt(E*A/kT)
+            x1,mu_T,k2=sample_target(y,rng)
+            E,u,v,w=free_gas_kinematics(E,u,v,w,A,kT,x1,mu_T,rng)
+        k_hit=int(z/dz)
+        hist["D_H"][k_hit]+=wt*(E_be-E)
+        nam=nuclides[jn]["name"]
+        hist["d_his"][nam][k_hit]+=wt*(E_be-E)
+        p["E"]=E
+        p["u"]=u
+        p["v"]=v
+        p["w"]=w
+        return True
+    else:
+        tal["n_A"]+=1
+        tal["n_i"]+=1
+        hist["n_hist"]+=1
+        return False
+
+
+def end_history(tal, hist, nuclides, NL):
+    """一条历史结束：把它自己的计数加进整个模拟的 sum 和 sq（第 4 课：每条历史是一个样本）。原历史循环最后 21 行。"""
+    track_h=hist["track_h"]
+    B_r=hist["B_r"]
+    B_c=hist["B_c"]
+    N_ar=hist["N_ar"]
+    a_g=hist["a_g"]
+    D_H=hist["D_H"]
+    d_his=hist["d_his"]
+    for j in range(NL):
+        for m in range(len(nuclides)):
+            name=nuclides[m]["name"]
+            tal["sigma_x"][name][j]+=d_his[name][j]
+            tal["sigma_x2"][name][j]+=d_his[name][j]**2
+        tal["track_sum"][j]+=track_h[j]
+        tal["track_sq"][j]+=track_h[j]**2
+        tal["Br_sum"][j]+=B_r[j]
+        tal["Br_sq"][j]+=B_r[j]**2
+        tal["Bc_sum"][j]+=B_c[j]
+        tal["Bc_sq"][j]+=B_c[j]**2
+        tal["Nc_sum"][j]+=N_ar[j]
+        tal["Nc_sq"][j]+=N_ar[j]**2
+        tal["ag_sum"][j]+=a_g[j]
+        tal["ag_sq"][j]+=a_g[j]**2
+        tal["DH_sum"][j]+=D_H[j]
+        tal["DH_sq"][j]+=D_H[j]**2
+    x = hist["tol_sigt_s"] - hist["n_hist"]
+    tal["tol_sigt_all"] += hist["tol_sigt_s"]
+    tal["v_sum"]+=x
+    tal["v_sq"]+=x**2
+
+
+def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False, NL=20, src=None):
+    if z_src is None:
+        z_src=d/2
+
+    assert len(order) == len(nuclides)
+
+    for i in range(len(nuclides)):
+        assert len(order[i]) == len(nuclides[i]["XS"])
+
+    assert t_cut is None or t_cut > 0.0, "t_cut=%r 必须是 None（不截断）或正数" % (t_cut,)
+    idx=prepare_nuclides(nuclides)
+    rng=lcg(seed)
+    edges=None
+    cdf=None
+    if src!=None:
+        edges,shares=src
+        cdf=make_cdf(shares)
+    tal=make_tallies(nuclides, NL)      # 10/23 拆分 ① B：全模拟的计数装进一个字典（框架第 1 问 甲）
+    dz=d/NL
+    for i in range(N):
+        p, hist = start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng)
+        for step in range(Max):
+            xs = lookup_xs(nuclides, idx, p["E"])
+            has_sign = fly(p, xs, hist, rng, d, dz, NL, t_cut)
+            # 这一段飞完：漏出 / 截断 → 历史结束（三种结局的计数留在这里，一眼能看全）
+            if p["z"]<0:
+                tal["n_R"]+=1
+                tal["nr_w"]+=p["wt"]
+                break
+            if p["z"]>d:
+                tal["n_T"]+=1
+                tal["nt_w"]+=p["wt"]
+                break
+            if has_sign ==True:
+                tal["nt_cut"]+=1
+                tal["E_cut"].append(p["E"])
+                break
+            if not collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz):
+                break
+        else:
+            if t_cut==None:
+                tal["n_sd"]+=1
+            else:
+                tal["n_stuck"]+=1
+        end_history(tal, hist, nuclides, NL)
+    return finish(tal, N, dz)          # 10/23 拆分 ① C
+
 
 
 if __name__ == "__main__":
