@@ -25,10 +25,10 @@ def load_kT(nuc,T):
         kT=float(root["kTs"][T][()])
     return kT
 def sigma_at_ext(E,XS,e):
-    if e>E[0]:
+    if e>=E[0]:
         XS,total=sigma_at(E,XS,e)
     else:
-        XS1,total1=sigma_at(E[0],XS,e)
+        XS1,total1=sigma_at(E,XS,E[0])
         XS=[0.0]*len(XS1)
         for i in range(len(XS1)):
             XS[i]=XS1[i]*math.sqrt(E[0]/e)
