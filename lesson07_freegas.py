@@ -68,74 +68,59 @@ def sample_target(y, rng):
         assert False, "抽靶核 1000 轮全被拒（正常情况不可能，必是 bug）：y=%r" % (y,)
 
 
+# ---- 10/24 Claude 换成精简版（用户 13:36「你把这个 fgk 直接换掉」）：和 whiteboard\copy_fgk_v2.py 逐字相同，
+#      物理和随机数用法一个没变，只是三个分量装进长度 3 的列表 + dot、norm 两个小函数。
+#      判据：whiteboard\check_fgk.py 8 组逐位 + 随机数用量一致；check_split.py F1–F3、R1、R2 逐位 ----
+def dot(a, b):
+    """两个三维向量的点乘：对应分量相乘再加起来（不是各乘各）。"""
+    return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
+
+
+def norm(a):
+    """三维向量的长度。"""
+    return math.sqrt(a[0]**2 + a[1]**2 + a[2]**2)
+
+
 def free_gas_kinematics(E, u, v, w, A, kT, x, mu_T, rng):
-    """四步矢量变换（讲义 §4.3）。
-    输出  E', 新方向 u', v', w'
-    """
-    # 单位：全程以靶核最可几速度 v_T 为尺（9/29 ③ 丙）
-    # 0.  入口：由 E、A、kT 算 y —— 和 sample_target 外面那次同一个公式
-    y=math.sqrt(E*A/kT)
-    # 1.  中子速度向量 = y × 中子方向 (u, v, w)
-    vnx=y*u
-    vny=y*v
-    vnz=y*w
-    # 2a. 最多 100 轮：各向同性抽方向 r → 减掉它沿中子方向的部分
+    """四步矢量变换（讲义 §4.3）。输入输出和原文完全一样：返回 E', u', v', w'。"""
+    d = (u, v, w)                                         # 中子方向
+    y = math.sqrt(E*A/kT)
+    # 1.  中子速度 = y × 中子方向
+    vn = [y*d[i] for i in range(3)]
+    # 2a. 抽一个方向 p，减掉它沿 d 的部分 → r；剩下太短就重抽（最多 100 轮）
     for k in range(100):
-        uu,vv,ww=isotropic_direction(rng)
-        al=uu*u+vv*v+ww*w
-        rx=uu-u*al
-        ry=vv-v*al
-        rz=ww-w*al
-        if math.sqrt(rx**2+ry**2+rz**2)>=1e-6:
+        p = isotropic_direction(rng)
+        al = dot(p, d)
+        r = [p[i] - d[i]*al for i in range(3)]
+        if norm(r) >= 1e-6:
             break
     else:
         # [Claude assert] for 的 else —— 抓：剩余长度永远不够（正常撞满概率约 1e-1230）
         assert False, "重抽 r 满 100 轮（正常不可能，必是 bug）：E=%r A=%r kT=%r y=%r" % (E, A, kT, y)
-    #     → 剩下的长度 ≥ 1e-6 就跳出，否则重抽（② 丙 + 续2 甲）
-    # 2b. 剩下的部分除以自己的长度 → e1
-    e1x=rx/math.sqrt(rx**2+ry**2+rz**2)
-    e1y=ry/math.sqrt(rx**2+ry**2+rz**2)
-    e1z=rz/math.sqrt(rx**2+ry**2+rz**2)
-    # 2c. 靶核方向 = mu_T × 中子方向 + sqrt(1 − mu_T²) × e1（不抽 phi、不造 e2：② 续 乙）
-    rbx=mu_T*u+math.sqrt(1-mu_T**2)*e1x
-    rby=mu_T*v+math.sqrt(1-mu_T**2)*e1y
-    rbz=mu_T*w+math.sqrt(1-mu_T**2)*e1z
-    # [Claude assert] 2c 之后 —— 抓：e1 没和中子方向垂直 / 没归一化、2c 某个分量抄错（判据 1 看不见这类错）
-    nb2 = rbx**2 + rby**2 + rbz**2
-    cb = rbx*u + rby*v + rbz*w
-    assert abs(nb2 - 1.0) < 1e-9 and abs(cb - mu_T) < 1e-9, \
-        "靶核方向不对：长度²=%.12g（应为 1），与中子方向夹角余弦=%.12g（应为 mu_T=%.12g）" % (nb2, cb, mu_T)
-    # 2d. 靶核速度向量 = x × 靶核方向
-    vbx=x*rbx
-    vby=x*rby
-    vbz=x*rbz
+    # 2b. r 归一化 → e1（和 d 垂直的单位向量）
+    nr = norm(r)
+    e1 = [r[i]/nr for i in range(3)]
+    # 2c. 靶核方向 = mu_T × d + sqrt(1 − mu_T²) × e1
+    st = math.sqrt(1 - mu_T**2)
+    rb = [mu_T*d[i] + st*e1[i] for i in range(3)]
+    # [Claude assert] 2c 之后 —— 抓：e1 没和中子方向垂直 / 没归一化、某个分量算错
+    assert abs(dot(rb, rb) - 1.0) < 1e-9 and abs(dot(rb, d) - mu_T) < 1e-9, \
+        "靶核方向不对：长度²=%.12g（应为 1），与中子方向夹角余弦=%.12g（应为 mu_T=%.12g）" % (dot(rb, rb), dot(rb, d), mu_T)
+    # 2d. 靶核速度 = x × 靶核方向
+    vb = [x*rb[i] for i in range(3)]
     # 3.  质心速度 = (中子速度 + A × 靶核速度) / (1 + A)
-    vcmx=(vnx+A*vbx)/(1+A)
-    vcmy=(vny+A*vby)/(1+A)
-    vcmz=(vnz+A*vbz)/(1+A)
-    # 4.  CM 里中子速度 = 中子速度 − 质心速度，记下速率
-    vncmx=vnx-vcmx
-    vncmy=vny-vcmy
-    vncmz=vnz-vcmz
-    vncm=math.sqrt(vncmx**2+vncmy**2+vncmz**2)
-    # 5.  CM 里各向同性抽新方向，乘同一个速率
-    u1,v1,w1=isotropic_direction(rng)
-    v1x=u1*vncm
-    v1y=v1*vncm
-    v1z=w1*vncm
-    # 6.  加回质心速度 → LAB 新速度 v' → E' = (kT/A) × |v'|² → 新方向 = v' / |v'|
-    vlx=vcmx+v1x
-    vly=vcmy+v1y
-    vlz=vcmz+v1z
-    vl=math.sqrt(vlx**2+vly**2+vlz**2)
-    # [Claude assert] 除以 vl 之前 —— 抓：LAB 新速度为 0，方向无定义（④续 甲）
-    assert vl > 0.0, "LAB 新速度为 0，方向无定义：E=%r A=%r kT=%r x=%r mu_T=%r" % (E, A, kT, x, mu_T)
-    El=(kT/A)*(vl**2)
-    u2=vlx/vl
-    v2=vly/vl
-    w2=vlz/vl
-    #     （|v'| = 0 时由 Claude 给的 assert 当场停：④续 甲）
-    return El,u2,v2,w2
+    vcm = [(vn[i] + A*vb[i])/(1 + A) for i in range(3)]
+    # 4.  CM 里中子速度 = 中子速度 − 质心速度，记下速率 s
+    vc = [vn[i] - vcm[i] for i in range(3)]
+    s = norm(vc)
+    # 5+6. CM 里各向同性抽新方向 q，乘同一个速率 s，加回质心速度 → LAB 新速度 vl
+    q = isotropic_direction(rng)
+    vl = [vcm[i] + q[i]*s for i in range(3)]
+    L = norm(vl)
+    # [Claude assert] 除以 L 之前 —— 抓：LAB 新速度为 0，方向无定义（④续 甲）
+    assert L > 0.0, "LAB 新速度为 0，方向无定义：E=%r A=%r kT=%r x=%r mu_T=%r" % (E, A, kT, x, mu_T)
+    # E' = (kT/A) × |vl|²；新方向 = vl / |vl|
+    return (kT/A)*L**2, vl[0]/L, vl[1]/L, vl[2]/L
 
 def sigma_at_ext(E, XS, e):
     # [Claude assert] 抓：能量被上游算成负数 / nan / inf，却被当成「低能」往下外推。
@@ -270,17 +255,23 @@ def make_tallies(nuclides, NL):
     sigma_x2={}
     kerma_sum={}
     kerma_sq={}
+    kerma_tot_sum={}
+    kerma_tot_sq={}
     for i in range(len(nuclides)):
         name=nuclides[i]["name"]
         sigma_x[name]=[0.0]*NL
         sigma_x2[name]=[0.0]*NL
         kerma_sum[name]=[0.0]*NL
         kerma_sq[name]=[0.0]*NL
+        kerma_tot_sum[name]=0.0
+        kerma_tot_sq[name]=0.0
     gH_sum=[0.0]*NL
     gH_sq=[0.0]*NL
     gB_sum=[0.0]*NL
     gB_sq=[0.0]*NL
     v_sum=v_sq=0.0
+    track_tot_sum=0.0
+    track_tot_sq=0.0
     tol_sigt_all=0.0
     return {
         "E_cut":E_cut,
@@ -317,6 +308,10 @@ def make_tallies(nuclides, NL):
         "gB_sum":gB_sum,
         "gB_sq":gB_sq,
         "tol_sigt_all":tol_sigt_all,
+        "track_tot_sum":track_tot_sum,
+        "track_tot_sq":track_tot_sq,
+        "kerma_tot_sum":kerma_tot_sum,
+        "kerma_tot_sq":kerma_tot_sq,
     }
 
 def finish(tal, N, dz):
@@ -403,6 +398,10 @@ def finish(tal, N, dz):
         "gH_sq":tal["gH_sq"],
         "gB_sum":tal["gB_sum"],
         "gB_sq":tal["gB_sq"],
+        "track_tot_sum":tal["track_tot_sum"],
+        "track_tot_sq":tal["track_tot_sq"],
+        "kerma_tot_sum":tal["kerma_tot_sum"],
+        "kerma_tot_sq":tal["kerma_tot_sq"],
     }
 
 # ============================================================
@@ -513,6 +512,12 @@ def fly(p, xs, hist, rng, d, dz, NL, t_cut):
     B_c=hist["B_c"]
     N_ar=hist["N_ar"]
     a_g=hist["a_g"]
+    kerco=xs["kerco"]
+    gH_coe=xs["gH_coe"]
+    gB_coe=xs["gB_coe"]
+    kerma_h=hist["kerma_h"]
+    gH_h=hist["gH_h"]
+    gB_h=hist["gB_h"]
     # 为什么是 1-rng.random() 而不是 rng.random()：
     #   random() 返回 [0,1) —— 0 取得到，1 取不到。若写 -log(xi)，xi=0 时 log 收到 0 → -inf，程序炸。
     #   取 1-xi 后 log 的参数落在 (0,1]，永远取不到 0。两种写法同分布，但安全性完全不同。
@@ -547,6 +552,10 @@ def fly(p, xs, hist, rng, d, dz, NL, t_cut):
         B_c[k0]+=wt*s*B_con
         N_ar[k0]+=wt*s*N_coe
         a_g[k0]+=wt*s*a_coe
+        for name in sorted(kerco.keys()):
+            kerma_h[name][k0]+=wt*s*kerco[name]
+        gH_h[k0]+=wt*s*gH_coe
+        gB_h[k0]+=wt*s*gB_coe
         seg    += s
         expect  = s
 
@@ -583,6 +592,10 @@ def fly(p, xs, hist, rng, d, dz, NL, t_cut):
             B_c[k]+=wt*dz_step / abs(w)*B_con
             N_ar[k]+=wt*dz_step / abs(w)*N_coe
             a_g[k]+=wt*dz_step / abs(w)*a_coe
+            for name in sorted(kerco.keys()):
+                kerma_h[name][k]+=wt*dz_step / abs(w)*kerco[name]
+            gH_h[k]+=wt*dz_step / abs(w)*gH_coe
+            gB_h[k]+=wt*dz_step / abs(w)*gB_coe
             seg+=dz_step/abs(w)
             # ③ cur = 这一步的终点
             cur=z_step
@@ -695,11 +708,20 @@ def end_history(tal, hist, nuclides, NL):
     a_g=hist["a_g"]
     D_H=hist["D_H"]
     d_his=hist["d_his"]
+    kerma_h=hist["kerma_h"]
+    gH_h=hist["gH_h"]
+    gB_h=hist["gB_h"]
     for j in range(NL):
         for m in range(len(nuclides)):
             name=nuclides[m]["name"]
             tal["sigma_x"][name][j]+=d_his[name][j]
             tal["sigma_x2"][name][j]+=d_his[name][j]**2
+            tal["kerma_sum"][name][j]+=kerma_h[name][j]
+            tal["kerma_sq"][name][j]+=kerma_h[name][j]**2
+        tal["gH_sum"][j]+=gH_h[j]
+        tal["gH_sq"][j]+=gH_h[j]**2
+        tal["gB_sum"][j]+=gB_h[j]
+        tal["gB_sq"][j]+=gB_h[j]**2
         tal["track_sum"][j]+=track_h[j]
         tal["track_sq"][j]+=track_h[j]**2
         tal["Br_sum"][j]+=B_r[j]
@@ -712,6 +734,14 @@ def end_history(tal, hist, nuclides, NL):
         tal["ag_sq"][j]+=a_g[j]**2
         tal["DH_sum"][j]+=D_H[j]
         tal["DH_sq"][j]+=D_H[j]**2
+    sum_th=sum(track_h)
+    tal["track_tot_sum"]+=sum_th
+    tal["track_tot_sq"]+=sum_th**2
+    for n in range(len(nuclides)):
+        name=nuclides[n]["name"]
+        sum_kh=sum(kerma_h[name])
+        tal["kerma_tot_sum"][name]+=sum_kh
+        tal["kerma_tot_sq"][name]+=sum_kh**2
     x = hist["tol_sigt_s"] - hist["n_hist"]
     tal["tol_sigt_all"] += hist["tol_sigt_s"]
     tal["v_sum"]+=x
