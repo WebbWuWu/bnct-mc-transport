@@ -1,8 +1,10 @@
 from xs_lookup import load_nuclide,find_cell
-from lesson07_freegas import load_kT
+from lesson07_freegas import load_kT,run_slab
 from lesson11_mt301 import load_heating
 import numpy as np
 from lesson08_dose import T,M_N,N_A,kur_table,KEEP_FACTOR
+import os,time
+from lesson08_dose import save_result,load_result,D,NL,N,SEED,OUT_DIR
 
 rho_w=0.998
 share_B=15e-6
@@ -107,3 +109,13 @@ if __name__ == "__main__":
             "%s 在 3.1e-6 eV（低于表下限）：%.17g，按 1/v 外推应为 %.17g" % (n["name"], hA, heat_f[0] * math.sqrt(E_f[0] / 3.1e-6))
         print("  %s：heat 三点（0.0253 eV、1 MeV、3.1e-6 eV 外推）路 A = 路 B，和 10/22 对上" % n["name"])
     print("build_water 判据全过")
+    pa=os.path.join(OUT_DIR,"water_N%d_s%d"%(N,SEED))
+    if os.path.exists(pa + ".json"):
+        r=load_result(pa)
+    else:
+        t1=time.time()
+        r=run_slab(N, SEED, D, nuclides, None, order, z_src=0.0, implicit=True, NL=NL, src=(edges, shares))
+        save_result(r,pa)
+        t2=time.time()
+        print("花费时间为%.6f"%(t2-t1))
+        
