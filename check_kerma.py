@@ -4,6 +4,7 @@
 #  判据归 Claude。2026-10-23 晚写（讲义第 11 课 §8 的 K1–K3）。被测：run_slab 新加的 6 个键（你写）。
 #  运行：Windows，Ctrl+F5。水模体（build_water）+ 隐式俘获，跑三次：KUR 源 3000 条（K0、K2、K3）、
 #        单能 1 MeV 2000 条（K1）、单能 1 MeV 1000 条「故意改坏」（K4）。约 1–2 分钟。全过最后打印「kerma 判据全过」。
+#  10/24 Claude 加 K5（判据 3 方案丙的 30 层之和计数）+ K4 里两个对应的试响。
 # ============================================================
 #
 #  记号
@@ -34,6 +35,11 @@
 #       ② gB × Q_val / Bc = 801 的份额 f_801（Bc = N_B (σ800+σ801) × Q_val，gB = N_B σ801；两个道都是 1/v，比值几乎不随能量变）
 #          f_801 从库里另算一次（0.0253 eV 处 σ801 / (σ800 + σ801)），10/9 实测 0.93702；门槛 |差| ≤ 0.002
 #       抓：gH 用成别的核素 / 别的道、gB 用成 800、少乘数密度
+#    K5（10/24 加，判据 3 方案丙）「30 层之和」计数：track_tot_*、kerma_tot_*（按核素名）
+#       两条路：每条历史先把 30 层加起来再累加的 *_tot_sum  vs  逐层累加的 *_sum 事后 30 层相加
+#       比的是同一个量：整块板的总径迹 / 每个核素的总 kerma（只是加法顺序不同 → 只差舍入，门槛相对 1e-9）
+#       另查 *_tot_sq 严格大于逐层 *_sq 之和（交叉项 2·x_j·x_k ≥ 0；只要有历史穿过两层以上就严格大于）
+#       抓：核素名错位（取 name 之前就用了它）、少一层 [name]、写进 j 循环被加 30 次、「先平方再加」（tot_sq 会等于逐层 sq 之和）
 #    K4 试响（纪律 4）：把 H1 的 heat 乘 2 再跑一次（一个真的写错的输入：同一项记了两遍），K1 必须响；
 #       另外把结果里的 gH 乘 1.01、B10 kerma 乘 1.02、gB 换成 800 的份额（假数据），K3①、K2、K3② 必须各自响
 #       抓：门槛松到什么都放过
@@ -68,6 +74,8 @@ K2_TOL = 0.01
 K3_H_MIN = 0.999
 K3_B_TOL = 0.002
 NEW_KEYS = ["kerma_sum", "kerma_sq", "gH_sum", "gH_sq", "gB_sum", "gB_sq"]
+TOT_KEYS = ["track_tot_sum", "track_tot_sq", "kerma_tot_sum", "kerma_tot_sq"]     # 10/24 方案丙
+K5_TOL = 1e-9
 
 
 def mean_se(s, sq, N):
@@ -174,6 +182,24 @@ def k3(r, N, f801):
     return rows, bad_H, bad_B
 
 
+def k5(r, names):
+    """方案丙的总量计数。返回没过的项（列表，空 = 全过）。"""
+    bad = []
+    for key in TOT_KEYS:
+        if key not in r:
+            return ["返回字典里没有 %r（finish 没交出去？）" % key]
+    pairs = [("track", r["track_tot_sum"], sum(r["track_sum"]), r["track_tot_sq"], sum(r["track_sq"]))]
+    for nm in names:
+        pairs.append(("kerma[%s]" % nm, r["kerma_tot_sum"][nm], sum(r["kerma_sum"][nm]),
+                      r["kerma_tot_sq"][nm], sum(r["kerma_sq"][nm])))
+    for lab, tot, lay, tsq, lsq in pairs:
+        if abs(tot - lay) > K5_TOL * abs(lay):
+            bad.append("%s：总量 %.10g ≠ 30 层之和 %.10g（相对差 %.2e）" % (lab, tot, lay, abs(tot / lay - 1) if lay else float("inf")))
+        if not tsq > lsq * (1 + 1e-9):
+            bad.append("%s：tot_sq %.6g 不大于逐层 sq 之和 %.6g —— 先平方再加了？" % (lab, tsq, lsq))
+    return bad
+
+
 if __name__ == "__main__":
     print("=" * 76)
     edges, shares = kur_table()
@@ -224,6 +250,13 @@ if __name__ == "__main__":
     assert not bB, "K3② 没过：第 %s 层 gB·Q_val/Bc 离 f_801 超过 %.3f —— gB 用成 800？" % (bB, K3_B_TOL)
     print("K3 过")
 
+    # ---------------- K5 ----------------
+    bad5 = k5(r, names)
+    for line in bad5:
+        print("  ✗ " + line)
+    assert not bad5, "K5 没过（方案丙的 30 层之和计数）：见上面 ✗ 那几行"
+    print("\nK5 过：track、%s 的总量 = 30 层之和（相对差 ≤ %.0e），tot_sq 都大于逐层 sq 之和" % ("、".join(names), K5_TOL))
+
     # ---------------- 只打印 ----------------
     rowsO, _ = k1(r1, N_K1, E_R, nucl="O16")
     print("\n（只看不判）O16（单能 1 MeV 那次）：径迹 kerma / 碰撞 D_H —— 差的是近似 #4（质心系各向同性），10/25 方案乙同一个问题")
@@ -260,4 +293,14 @@ if __name__ == "__main__":
     assert bB4, "K4：gB 换成 800 的份额，K3② 没响"
     print("  gB 换成 800 那一支 → K3② 在 %d 层响 ✓" % len(bB4))
 
-    print("\nkerma 判据全过（K0–K4）")
+    r5 = copy.deepcopy(r)
+    nm0, nm1 = names[0], names[1]
+    r5["kerma_tot_sum"][nm0], r5["kerma_tot_sum"][nm1] = r["kerma_tot_sum"][nm1], r["kerma_tot_sum"][nm0]
+    assert k5(r5, names), "K4：kerma_tot_sum 两个核素对调，K5 没响"
+    print("  kerma_tot_sum 里 %s、%s 对调 → K5 响 ✓" % (nm0, nm1))
+    r6 = copy.deepcopy(r)
+    r6["track_tot_sq"] = sum(r["track_sq"])
+    assert k5(r6, names), "K4：track_tot_sq 换成「先平方再加」，K5 没响"
+    print("  track_tot_sq 换成「先平方再加」→ K5 响 ✓")
+
+    print("\nkerma 判据全过（K0–K5）")
