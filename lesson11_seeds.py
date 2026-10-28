@@ -4,7 +4,7 @@ from lesson08_dose import kur_table,KEEP_FACTOR,save_result,D,NL,OUT_DIR
 import os,time
 
 N_hi=20000
-seeds=[2001+i for i in range (10)]
+seeds=[2001+i for i in range (30)]
 
 if __name__=="__main__":
     edges,shares=kur_table()
