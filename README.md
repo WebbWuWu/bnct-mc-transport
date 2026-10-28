@@ -3,11 +3,11 @@
 一个从零手写的蒙特卡罗中子输运程序。
 
 最终目标是 **GPU 加速的 BNCT 剂量计算引擎**；本仓库当前处于 **Python 参考实现阶段**，
-Python 版已与 OpenMC 逐层对拍（第 9 课），之后重写为 C++ 并移植到 CUDA。
+Python 版已与 OpenMC 逐层对拍（第 9、11 课），之后重写为 C++ 并移植到 CUDA。
 
 > **程序本体的代码行由我自己敲**（随机数、抽样、截面、输运、打分、剂量、OpenMC 输入、出图）。
 > 部分文件起步时由 AI 助手给出框架 —— 文件头注释、函数签名、步骤注释或填空脚手架（文件名带 `scaffold` 或文件头注明），函数体由我写。
-> 判据脚本（`lesson0X_check*.py`）、抄写稿（`copy_*.py`）和 `lesson08_dose.py` 的物理常数块由 AI 助手写，判据的门槛由我定；这些提交都标了 Co-Authored-By。
+> 判据脚本（`lesson*_check*.py`、`check_*.py`）和 `lesson08_dose.py` 的物理常数块由 AI 助手写；`run_slab` 拆成小函数的重构也由 AI 助手做（算法一字不动，`check_split.py` 逐位回归）；判据的门槛由我定；这些提交都标了 Co-Authored-By。
 > 提交历史就是开发过程本身，包括每一次踩坑和修正。
 
 ---
@@ -223,6 +223,63 @@ E_R = E_γ²/(2M_d c²) = 2.2246²/(2 × 1875.6) MeV ≈ 1317 eV（从库里的 
 - 弹性散射在质心系各向同性（MeV 区 O-16 实际偏前向）：本程序有、OpenMC 没有。各向同性时快中子钻不深，
   方向和 D_H「深处 H-1 偏低、浅处 O-16 偏高」一致 —— **是首要怀疑对象，还没证明**。
 
+### 第 11 课：水模体 + 按核素记 kerma（🏁 M2）
+
+第 9 课比的是软组织、D_H 只记 H 的弹性反冲（碰撞估计）。第 11 课换成**剂量学里的标准做法**：
+组织取水，中子剂量 = **kerma**，按核素分开记，并且和 OpenMC 的 `heating` 是**同一个量**，可以直接比。
+
+**kerma 怎么记**：库里每个核素有一列 MT=301 加热数 H(E)（eV·b）= Σ 各反应截面 × 该反应平均交给带电粒子的能量。
+中子在第 k 层飞过长度 l，就给该层记 `wt × l × N × 1e-24 × H(E)`（eV）—— 径迹长度估计，不碰撞也记。
+这样 D_B、D_H、D_O 三份都由同一行代码记，H(n,γ) 中氘核的 1.32 keV 反冲也自动在 H-1 的 H(E) 里。
+γ 只计数、不输运（第 11 课不含光子剂量）。
+
+**同一个问题**：15 cm 水平板（H-1 / O-16 + B-10 15 ppm，ρ = 0.998 g/cm³，294 K），30 层 × 0.5 cm；KUR 三群源垂直入射；
+同一份 ENDF/B-VIII.0 库；两边都不开 S(α,β)。本程序 10⁵ 历史；OpenMC 10⁷ 历史 × 10 个种子。
+
+`lesson11_water.py`（材料）· `lesson11_mt301.py`（读 MT=301）· `lesson11_openmc.py`（OpenMC 输入）· `lesson11_compare.py`（逐层比较）· `lesson11_plot.py`（出图）
+
+![本程序 vs OpenMC：水模体按核素 kerma 与逐层比值](outputs/m2_final.png)
+
+**判据为什么改了**：第 9 课已经量到 OpenMC 的 `heating` 30 层一起涨落。这次用 10 个种子量出层间相关 ρ̄ ≈ 0.3，
+按「各层独立」的 χ² 判，两个都对的程序也有约 1/4 的机会被误报（20 万次模拟）。所以拆成两条，**门槛在看对比数据之前定**：
+
+| 条 | 判什么 | 门槛 |
+|---|---|---|
+| 总量 | 30 层之和（每条历史单独记一个总和，不是各层 SE 平方相加） | \|z\| ≤ 3 |
+| 形状 | Σ(z − z̄)² / (1 − ρ̄)：扣掉整体偏移后逐层起伏是否正常 | χ²₂₉ 的 99% 区间 [13.12, 52.34] |
+| 前置 | R = SE/均值 > 0.2 的层 SE 不可信，不进形状 | — |
+
+两条都在故意写错的版本上试过（埋 ±6 SE 倾斜 / +6 SE 整体偏移，各响一次）。
+
+| 量 | 30 层总量比 | 总量 z | 1σ 内 | 2σ 内 | 最大 \|z\| | 判据 |
+|---|---|---|---|---|---|---|
+| 通量 | 1.0010 | 0.41 | 27/30 | 30/30 | 1.43 | 过 |
+| D_B（B-10） | 1.0011 | 0.36 | 26/30 | 30/30 | 1.53 | 过 |
+| D_H（H-1） | 0.9982 | −0.08 | 22/30 | 28/30 | 2.86 | 过 |
+| D_O（O-16） | 0.9945 | −0.20 | 20/30 | 29/30 | 2.10 | 过 |
+
+（B-10 heating、H(n,γ)、B-10 (n,α) 都 ∝ 1/v，逐层 z 差 < 1e-4，三个只算一个独立证据。）
+
+**近似 #4（弹性散射质心系各向同性）有多大 —— 单变量实验**：本程序改不了「真实角分布」之前，
+反过来把 OpenMC 的 H-1、O-16、B-10 弹性角分布换成质心系各向同性，其余全同，各 10 个种子：
+
+![OpenMC 各向同性版 ÷ 原版](outputs/m2_planB.png)
+
+| 量 | 浅处 0–2 cm | 深处 10–15 cm | 30 层总量 |
+|---|---|---|---|
+| H-1 kerma | +1.4% | −5 ～ −8% | 0.9947（z = −6.4） |
+| O-16 kerma | +2% | −6 ～ −9% | 0.9917（z = −7.2） |
+| 通量、D_B | ≤ 0.3% | ≤ 0.3% | 0.9999 |
+
+真实 O-16 在 MeV 区偏前向散射：每次反冲交出的少（浅处各向同性版反而多），中子留下的能量多、钻得深（深处原版多）。
+热中子撞了十几次早已「忘了」最初几次的方向，所以通量和 D_B 不受影响。本程序 10⁵ 历史每层 R ≈ 5%，分辨不出这 5–9%。
+
+**已知问题，不藏**：
+- 第 9 课 D_H（H-1）9–12 cm 偏低约 20%，这次只解释了 5–9%（近似 #4）；剩下的部分在查。
+- 把本程序加到约 56 万历史（28 个种子）后：H-1、O-16 对原版 OpenMC 形状不过、对各向同性版过 —— 就是 #4；
+  **通量和 D_B 深处（10–15 cm）低约 1%，对两个版本都不过，原因未明**。同时发现 `rng.py` 的 LCG（模 2³²）周期只有 4.3e9，
+  两个种子 2007 / 2025 的随机数序列重叠、结果几乎相同 —— 多种子统计要先换掉发生器再下结论。
+
 ### 统计模块
 
 `mcstat.py` — `mean_se` / `dev_sigma` / `row` / `header` / `chi2_uniform` / `check`。
@@ -272,6 +329,7 @@ E_R = E_γ²/(2M_d c²) = 2.2246²/(2 × 1875.6) MeV ≈ 1317 eV（从库里的 
 | 第 7 课 | `lesson07_freegas.py`；判据（AI 助手写）`lesson07_checks.py` `lesson07_check1.py` `lesson07_check2.py` `lesson07_check4.py` |
 | 第 8 课 | `lesson08_dose.py`；判据与核数（AI 助手写）`lesson08_checks.py` `lesson08_check4.py` `lesson08_check_dose.py` `lesson08_check_src.py` `lesson08_xs_numbers.py` |
 | 第 9 课 | `lesson09_openmc.py` `lesson09_compare.py` `lesson09_plot.py`；判据（AI 助手写）`lesson09_check1.py` – `lesson09_check5.py` `lesson09_check_se.py` |
+| 第 11 课 | `lesson11_water.py` `lesson11_mt301.py` `lesson11_openmc.py` `lesson11_iso.py` `lesson11_compare.py` `lesson11_seeds.py` `lesson11_plot.py` `lesson11_muen.py`（NIST 水的 μ/ρ、μen/ρ）`lesson11_qthr.py`（Q 值反推阈值）；判据（AI 助手写）`lesson11_check3.py` `lesson11_check_rho.py` `lesson11_rho_mine.py` `check_kerma.py` `check_split.py` |
 | 公共模块 | `mcstat.py` `rng.py` `specs/mcstat_spec.md` |
 | 白板题（手写练习规格书） | `whiteboard/whiteboard_02_spec.md` `whiteboard/whiteboard_05_spec.md` `whiteboard/whiteboard_05_scaffold.py` `whiteboard_05_rewrite.py` `whiteboard/whiteboard_06_spec.md` `whiteboard/whiteboard_06_loglog.py` |
 | 工具讲义 | `docs/tool_debugger_guide.md` `docs/tool_git_guide.md` `docs/tool_matplotlib_guide.md` `specs/matplotlib_spec.md` |
@@ -280,14 +338,11 @@ E_R = E_γ²/(2M_d c²) = 2.2246²/(2 × 1875.6) MeV ≈ 1317 eV（从库里的 
 
 ## 下一步
 
-| 时间 | 内容 |
-|---|---|
-| 第 6 课 | ✅ 连续能量接进 1D 平板。判据：**单能极限下与 `lesson03_tally.py` 逐位相同** |
-| 第 7–8 课 | ✅ free-gas 热化与上散射（第 5 课的 H-1 曲线已经看见它）；¹⁰B(n,α)⁷Li 与剂量（D_B / D_N / D_H，γ 只记产额） |
-| **里程碑 1** | ✅ 2026-10-18 完成：与 OpenMC 逐层对拍，见第 9 课 |
-| 第 10–14 课 | C++ 重写 → CUDA 移植（一线程一历史，atomicAdd 打分） |
-| **里程碑 2** | 给出 GPU / CPU 单线程的真实加速比与历史数-时间曲线 |
-| 收尾 | 一维锂包层 TBR 算例（14.1 MeV 源，⁶Li(n,α)t 与 ⁷Li(n,n'α)t 两个反应道） |
-
-几何一律一维。BNCT 深度剂量和锂包层 TBR 都是一维量，三维几何不改变物理、
-不产生新的验证、也不改变加速比，因此排在 CUDA 之后。
+| 里程碑 | 内容 | 状态 |
+|---|---|---|
+| 里程碑 1 | 软组织，与 OpenMC 逐层对拍（第 9 课） | ✅ 2026-10-18 |
+| M2 | 水模体 + 按核素 kerma，与 OpenMC 对拍；近似 #4 的单变量实验（第 11 课） | ✅ 2026-10 |
+| M3 | 水的 S(α,β)（束缚氢热散射）+ 库里的真实弹性角分布 | 进行中 |
+| M4 | γ 光子输运 + 光子 kerma | |
+| M5 | 三维体素几何 | |
+| 之后 | C++ 重写 → CUDA 移植，给出 GPU / CPU 加速比 | |

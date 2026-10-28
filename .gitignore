@@ -10,3 +10,4 @@ after_*.txt
 before_*.txt
 after_*.txt
 outputs/openmc/
+outputs/
