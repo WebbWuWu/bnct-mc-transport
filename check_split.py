@@ -34,6 +34,8 @@
 #
 #  验证（4 条；每条一行「抓什么」）
 #    S1 存基准时，lesson07_freegas.py 必须还是拆之前那一版（md5 和 10/22 收工时一样）
+#       🆕 10/31 换随机数（乙）后重存基准：S1 改成核 10/31 那版 lesson07_freegas.py + rng.py 的 md5；
+#          旧基准（模 2^32 发生器）挪到 outputs\split_ref_old_lcg32\ 留底
 #       抓：先动了 run_slab 才存基准 —— 那就是拿新版和新版比，永远过，判据零分辨率
 #    S2 存基准时，同一个种子跑两遍逐位相同（假库三个）
 #       抓：程序里有不受种子控制的东西（那样「逐位回归」本身没意义）
@@ -74,7 +76,10 @@ sys.path.insert(0, HERE)
 NEW_MODULE = "lesson07_freegas"              # 拆完的 run_slab 在哪个模块（你定，改这一行）
 REF_DIR = os.path.join(HERE, "outputs", "split_ref")
 BASE_FILE = os.path.join(HERE, "lesson07_freegas.py")
-BASE_MD5 = "8acbeec8c42250f3b720346164929e2e"   # 10/22 收工时 lesson07_freegas.py 的 md5（Claude 10/23 15:10 读的）
+BASE_MD5 = "620b49fc6bc9089e5b6fe04f39aee782"   # 10/31 换随机数（乙）后 lesson07_freegas.py 的 md5（Claude 10/31 写进你电脑时核的）
+#           旧值 8acbeec8…（10/22 收工、拆之前那版）—— 旧基准已挪到 outputs\split_ref_old_lcg32\
+RNG_FILE = os.path.join(HERE, "rng.py")
+RNG_MD5 = "a3ca754d059de92a4574d48e8c4377a2"    # 10/31 写完跳跃函数、check_rng 5 条全过的 rng.py
 
 
 # ------------------------------------------------------------
@@ -252,9 +257,12 @@ if __name__ == "__main__":
         print("\n【存基准】outputs\\split_ref\\ 里还没有基准 → 用现在的 run_slab 存")
         got = md5_of(BASE_FILE)
         assert got == BASE_MD5, \
-            "S1：lesson07_freegas.py 的 md5 = %s，不是 10/22 收工那版 %s —— 你已经改过它了。" \
-            "基准必须用拆之前的版本存：先告诉 Claude，别继续" % (got, BASE_MD5)
-        print("  S1 过：lesson07_freegas.py 还是拆之前那版（md5 %s…）" % got[:8])
+            "S1：lesson07_freegas.py 的 md5 = %s，不是 10/31 换完随机数那版 %s —— 你又改过它了。" \
+            "基准必须用 check_rng 过了的那一版存：先告诉 Claude，别继续" % (got, BASE_MD5)
+        got_r = md5_of(RNG_FILE)
+        assert got_r == RNG_MD5, \
+            "S1：rng.py 的 md5 = %s，不是 10/31 check_rng 全过那版 %s —— 先告诉 Claude，别继续" % (got_r, RNG_MD5)
+        print("  S1 过：lesson07_freegas.py、rng.py 都是 10/31 换完随机数那版（md5 %s… / %s…）" % (got[:8], got_r[:8]))
         os.makedirs(REF_DIR, exist_ok=True)
         refs = {}
         for name in names:
