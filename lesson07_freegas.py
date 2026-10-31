@@ -13,7 +13,7 @@
 # ============================================================
 
 import math
-from rng import lcg, isotropic_direction
+from rng import lcg, isotropic_direction,jump,S
 import os
 import h5py
 import numpy as np
@@ -521,8 +521,8 @@ def fly(p, xs, hist, rng, d, dz, NL, t_cut):
     # 为什么是 1-rng.random() 而不是 rng.random()：
     #   random() 返回 [0,1) —— 0 取得到，1 取不到。若写 -log(xi)，xi=0 时 log 收到 0 → -inf，程序炸。
     #   取 1-xi 后 log 的参数落在 (0,1]，永远取不到 0。两种写法同分布，但安全性完全不同。
-    #   命中概率约 2^-32：跑一亿条历史大概撞一次 —— 调试时永远不出现，演示时出现。
-    #   这个选择配套的是本文件里 LCG 的区间，换 RNG 要重新核对。见 whiteboard_02_spec.md。
+    #   命中概率约 2^-53 ≈ 1e-16（random() 只在状态高 53 位全为 0 时返回 0）：实际跑不出来，但仍取得到，所以 1-xi 照留。
+    #   这个选择配套的是 rng.py 里 random() 的区间 [0,1)（只取高 53 位，10/31 换模 2^63），换 RNG 要重新核对。见 whiteboard_02_spec.md。
     s=-math.log(1-rng.random())/Sigma_t
     has_sign = False
 
@@ -768,6 +768,7 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
     tal=make_tallies(nuclides, NL)      # 10/23 拆分 ① B：全模拟的计数装进一个字典（框架第 1 问 甲）
     dz=d/NL
     for i in range(N):
+        rng.state=jump(seed,i*S)
         p, hist = start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng)
         for step in range(Max):
             xs = lookup_xs(nuclides, idx, p["E"])

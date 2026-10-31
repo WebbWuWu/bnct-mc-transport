@@ -16,9 +16,10 @@
 
 import math
 
-a=1664525
-c=1013904223
-m=2**32
+a=2806196910506780709
+c=1
+m=2**63
+S=152917
 
 class lcg:
     def __init__(self,seed):
@@ -27,8 +28,22 @@ class lcg:
         self.state=(self.state*a+c)%m
         return self.state
     def random(self):
-        return self.uint()/m
+        return (self.uint()>>10)/2**53
 
+def jump(x0,n,a=a,c=c,m=m):
+    A_ans=1
+    B_ans=0
+    A_cur=a
+    B_cur=c
+    while n>0:
+        if n&1:
+            A_ans=(A_cur*A_ans)%m
+            B_ans=(A_cur*B_ans+B_cur)%m
+        B_cur=((A_cur+1)*B_cur)%m
+        A_cur=(A_cur*A_cur)%m
+        n=n>>1
+    x0=(A_ans*x0+B_ans)%m
+    return x0
 
 def isotropic_direction(rng):
     mu=rng.random()*2.0-1.0
