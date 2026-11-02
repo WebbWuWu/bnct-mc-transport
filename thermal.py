@@ -7,10 +7,11 @@
 #  运行：Windows 的 openmc (3.10.20) 环境，Ctrl+F5（只用 h5py + numpy）
 # ============================================================
 
-import os
+import os,math
 import h5py
 import numpy as np
-from check_thermal import check_T1,check_T1_selftest
+from check_thermal import check_T1,check_T1_selftest,check_T3E,check_T3E_selftest
+from rng import lcg
 
 SAB_PATH = os.path.join(r"E:\BNCT_GPU\lib80x_hdf5", "c_H_in_H2O.h5")   # 水里 H 的热散射库，约 629 MB
 T_TAG = "294K"                                                         # 只用 294K 这一档（M3 框架 ⑤）
@@ -52,9 +53,56 @@ def load_thermal(sab_path,T_tag):
             thermal["tables"].append(dic)
     return thermal
 
+def sample_thermal(thermal,E,rng):
+    E_in=thermal["E_in"]
+    i=np.searchsorted(E_in,E,side="right")-1
+    if i<0:
+        i=0
+    if i>len(E_in)-2:
+        i=len(E_in)-2
+    f=(E-E_in[i])/(E_in[i+1]-E_in[i])
+    if f>0.5:
+        l=i+1
+    else:
+        l=i
+    E_l=E_in[l]
+    tab=thermal["tables"][l]
+    cdf=tab["cdf"]
+    xi1=rng.random()
+    j=np.searchsorted(cdf,xi1,side="right")-1
+    j=min(max(0,j),len(cdf)-2)
+    E_out=tab["E_out"]
+    pdf=tab["pdf"]
+    E_j=E_out[j]
+    E_j1=E_out[j+1]
+    p_j=pdf[j]
+    p_j1=pdf[j+1]
+    c_j=cdf[j]
+    s=(p_j1-p_j)/(E_j1-E_j)
+    if s==0.0:
+        d=(xi1-c_j)/p_j
+    else:
+        d=(math.sqrt(max(0.0,(p_j**2 + 2*s*(xi1-c_j))))-p_j)/s
+    E_new=E_j+d
+
+    if E_new<E_l/2:
+        E_new=E_new*(2*E/E_l-1)
+    else:
+        E_new+=E-E_l
+    return E_new
+
 if __name__=="__main__":
     thermal=load_thermal(SAB_PATH,T_TAG)
     print(thermal["E_max"],len(thermal["xs_E"]),np.interp(0.0253,thermal["xs_E"], thermal["xs_sig"]))
     print(len(thermal["tables"]),thermal["tables"][48]["mu"].shape,thermal["tables"][48]["cdf"][-1],np.array_equal(thermal["xs_E"], thermal["E_in"]))
-    check_T1(thermal)
-    check_T1_selftest(thermal)
+    # check_T1(thermal)
+    # check_T1_selftest(thermal)
+    # for E in [0.0265,0.0253,3e-6]:
+    #     l,f=sample_thermal(thermal,E,None)
+    #     print(l,f)
+    rng=lcg(20261102)
+    # for i in range(10):
+    #     a,b,c=sample_thermal(thermal,0.0265,rng)
+    #     print(a,b,c,(a-b),a/b)
+    check_T3E(thermal, sample_thermal)
+    check_T3E_selftest(thermal, sample_thermal)
