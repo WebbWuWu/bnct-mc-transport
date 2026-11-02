@@ -144,3 +144,121 @@ def check_T1_selftest(thermal):
             continue
         raise AssertionError("自检：「%s」没有任何一条响 —— 判据有漏洞，截图给 Claude" % what)
     print("T1 自检全过：6 种错，5 条判据各自都响过")
+
+
+# ============================================================
+#  T3（能量那一半，11/2 Claude 加）：sample_thermal 抽出的 E′ 对不对
+#  用法（thermal.py 的 if __name__ 块里）：
+#      from check_thermal import check_T3E, check_T3E_selftest
+#      check_T3E(thermal, sample_thermal)              # 正式判
+#      check_T3E_selftest(thermal, sample_thermal)     # 头一次跑做一遍：故意写错 2 种，确认会响（纪律 4）
+#  两条路：
+#    你的路   = sample_thermal 抽 10 万次，数上散射比例、算 ⟨E′⟩/E
+#    判据的路 = 这里直接读库里这张表的 E′、pdf 两行（不经过 load_thermal），逐段精确积分：
+#               pdf 每段是直线 → ∫p 用梯形精确；E′·p 是二次 → 用辛普森精确（11/1 你推过同一个式子）
+#  只在格点上测：E 取某张表自己的入射能量 → 选表 f = 0、修正 E′ 不起作用。
+#      盲区：「修正 E′」那一步、两张表之间的 E —— 由整体对拍（判据 3 丙）管
+#  门槛（看数据之前定）：先查 R = SE / 均值 < 0.2（规则 14），再 |z| < 3
+#  明天（2）加 μ 以后，⟨μ⟩ 那一条再加进来（成为完整的 T3）
+#  sample_thermal 返回一个数（E′）或一个元组（第 0 个是 E′）都能判
+# ============================================================
+import math
+from rng import lcg
+
+T3_N = 100000
+T3_SEED = 20261103
+T3_E_NEAR = [0.0253, 1.05]      # 测这两个能量附近的那张表（10/31 直接积分：54.5% / 1.19、4.7% / 0.566）
+T3_Z = 3.0
+
+
+def t3_read(l, path=SAB_PATH, T=T_TAG):
+    """判据自己的路：直接从库里切第 l 张表的 E′、pdf 两行。"""
+    with h5py.File(path, "r") as f:
+        dist = f["c_H_in_H2O"][T]["inelastic/distribution"]
+        E_in = dist["energy"][:]
+        offs = np.asarray(dist["energy_out"].attrs["offsets"]).astype(int)
+        n_col = int(dist["energy_out"].shape[1])
+        beg = offs[l]
+        end = offs[l + 1] if l + 1 < len(offs) else n_col
+        x = dist["energy_out"][0, beg:end]
+        p = dist["energy_out"][1, beg:end]
+    return float(E_in[l]), np.asarray(x, float), np.asarray(p, float)
+
+
+def t3_ref(E, x, p):
+    """对表直接积分：上散射比例 P(E′ > E)、⟨E′⟩ / E。"""
+    a, b = x[:-1], x[1:]
+    pa, pb = p[:-1], p[1:]
+    seg = (b - a) * (pa + pb) / 2.0                           # 每段 ∫p（梯形，对直线精确）
+    norm = seg.sum()
+    mean = np.sum((b - a) / 6.0 * ((2 * a + b) * pa + (a + 2 * b) * pb)) / norm
+    k = int(np.searchsorted(x, E, side="right")) - 1          # E 落在第 k 段
+    below = seg[:k].sum() if k > 0 else 0.0
+    if 0 <= k < len(x) - 1:
+        dd = E - x[k]
+        s = (p[k + 1] - p[k]) / (x[k + 1] - x[k])
+        below += p[k] * dd + 0.5 * s * dd * dd
+    return 1.0 - below / norm, mean / E
+
+
+def t3_sample(thermal, sample, E, n, seed):
+    rng = lcg(seed)
+    out = np.empty(n)
+    for k in range(n):
+        r = sample(thermal, E, rng)
+        out[k] = r[0] if isinstance(r, tuple) else r
+    up = float(np.mean(out > E))
+    se_up = math.sqrt(up * (1 - up) / n)
+    ratio = out / E
+    m = float(ratio.mean())
+    se_m = float(ratio.std(ddof=1)) / math.sqrt(n)
+    return up, se_up, m, se_m
+
+
+def check_T3E(thermal, sample, n=T3_N, quiet=False, reader=t3_read):
+    E_in = thermal["E_in"]
+    for t, E_near in enumerate(T3_E_NEAR):
+        l = int(np.argmin(np.abs(np.asarray(E_in) - E_near)))
+        E, x, p = reader(l)
+        up_ref, m_ref = t3_ref(E, x, p)
+        up, se_up, m, se_m = t3_sample(thermal, sample, E, n, T3_SEED + t)
+        # 规则 14：先查 R
+        assert se_up / up < 0.2 and se_m / m < 0.2, \
+            "[T3-0] 第 %d 张 R 太大（上散射 R = %.3f，⟨E′⟩/E R = %.3f）：SE 不可信，别看 z" % (l, se_up / up, se_m / m)
+        z_up = (up - up_ref) / se_up
+        z_m = (m - m_ref) / se_m
+        # [T3-1] 抓：选错表、区间 j 错一格、二次方程解错（E′ 偏到 E 的另一侧）
+        assert abs(z_up) < T3_Z, \
+            "[T3-1] 第 %d 张（E = %.4g eV）上散射比例 %.4f ± %.4f，对表积分 %.4f，z = %+.1f" % (l, E, up, se_up, up_ref, z_up)
+        # [T3-2] 抓：E′ 整体偏高 / 偏低（d 少一项、修正多做了、单位）
+        assert abs(z_m) < T3_Z, \
+            "[T3-2] 第 %d 张（E = %.4g eV）⟨E′⟩/E = %.4f ± %.4f，对表积分 %.4f，z = %+.1f" % (l, E, m, se_m, m_ref, z_m)
+        if not quiet:
+            print("T3E 第 %3d 张 E = %.4g eV · 上散射 %.4f ± %.4f（表 %.4f，z = %+.2f）· ⟨E′⟩/E %.4f ± %.4f（表 %.4f，z = %+.2f）"
+                  % (l, E, up, se_up, up_ref, z_up, m, se_m, m_ref, z_m))
+    if not quiet:
+        print("T3E 过：2 个能量 × %d 次" % n)
+
+
+def check_T3E_selftest(thermal, sample, n=T3_N, reader=t3_read):
+    """纪律 4：在故意写错的版本上跑，必须响。"""
+    E_in = np.asarray(thermal["E_in"])
+
+    def left_table(th, E, rng):          # 选表永远取左边一张（等价于 E 给错了一格）
+        i = int(np.searchsorted(E_in, E, side="right")) - 1
+        return sample(th, E_in[max(i - 1, 0)], rng)
+
+    def high_2pct(th, E, rng):           # E′ 整体偏高 2%
+        r = sample(th, E, rng)
+        return (r[0] if isinstance(r, tuple) else r) * 1.02
+
+    for what, fake in [("选表取了左边一张", left_table), ("E′ 整体偏高 2%", high_2pct)]:
+        try:
+            check_T3E(thermal, fake, n=n, quiet=True, reader=reader)
+        except AssertionError as e:
+            tag = str(e)[:6]
+            assert tag in ("[T3-1]", "[T3-2]"), "自检：「%s」响的是 %s" % (what, tag)
+            print("自检 ✅ %-12s → %s 响了" % (what, tag))
+            continue
+        raise AssertionError("自检：「%s」没有任何一条响 —— 判据有漏洞，截图给 Claude" % what)
+    print("T3E 自检全过：2 种错都响了")
