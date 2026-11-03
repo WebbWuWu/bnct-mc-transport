@@ -10,7 +10,7 @@
 import os,math
 import h5py
 import numpy as np
-from check_thermal import check_T1,check_T1_selftest,check_T3E,check_T3E_selftest
+from check_thermal import check_T1,check_T1_selftest,check_T3E,check_T3E_selftest,check_T3,check_T3_selftest,check_T2,check_T2_selftest
 from rng import lcg
 
 SAB_PATH = os.path.join(r"E:\BNCT_GPU\lib80x_hdf5", "c_H_in_H2O.h5")   # 水里 H 的热散射库，约 629 MB
@@ -78,6 +78,8 @@ def sample_thermal(thermal,E,rng):
     p_j=pdf[j]
     p_j1=pdf[j+1]
     c_j=cdf[j]
+    c_j1=cdf[j+1]
+    g=(xi1-c_j)/(c_j1-c_j)
     s=(p_j1-p_j)/(E_j1-E_j)
     if s==0.0:
         d=(xi1-c_j)/p_j
@@ -89,7 +91,39 @@ def sample_thermal(thermal,E,rng):
         E_new=E_new*(2*E/E_l-1)
     else:
         E_new+=E-E_l
-    return E_new
+    xi2=rng.random()
+    k=int(xi2*N_MU)
+    mu_tab=tab["mu"]
+    mu=mu_tab[j,k]+g*(mu_tab[j+1,k]-mu_tab[j,k])
+    if k==0:
+        mu_left=-1-(mu+1)
+    else:
+        mu_left=mu_tab[j,k-1]+g*(mu_tab[j+1,k-1]-mu_tab[j,k-1])
+    if k==N_MU-1:
+        mu_right=1+1-mu
+    else:
+        mu_right=mu_tab[j,k+1]+g*(mu_tab[j+1,k+1]-mu_tab[j,k+1])
+    xi3=rng.random()
+    width=min((mu-mu_left),(mu_right-mu))
+    mu+=width*(xi3-0.5)
+    return E_new,mu
+
+def rotate_dir(u,v,w,mu,phi):
+    cos_phi=math.cos(phi)
+    sin_phi=math.sin(phi)
+    a=math.sqrt(max(0.0,1-mu**2))
+    b=math.sqrt(max(0.0,1-w**2))
+    if b>1e-10:
+        u_new=u*mu+a*(u*w*cos_phi-v*sin_phi)/b
+        v_new=mu*v+a*(v*w*cos_phi+u*sin_phi)/b
+        w_new=mu*w-a*b*cos_phi
+        return u_new,v_new,w_new
+    else:
+        b=math.sqrt(1-v**2)
+        u_new=mu*u+a*(u*v*cos_phi+w*sin_phi)/b
+        v_new=mu*v-a*b*cos_phi
+        w_new=mu*w+a*(v*w*cos_phi-u*sin_phi)/b
+        return u_new,v_new,w_new
 
 if __name__=="__main__":
     thermal=load_thermal(SAB_PATH,T_TAG)
@@ -101,8 +135,9 @@ if __name__=="__main__":
     #     l,f=sample_thermal(thermal,E,None)
     #     print(l,f)
     rng=lcg(20261102)
-    # for i in range(10):
-    #     a,b,c=sample_thermal(thermal,0.0265,rng)
-    #     print(a,b,c,(a-b),a/b)
-    check_T3E(thermal, sample_thermal)
-    check_T3E_selftest(thermal, sample_thermal)
+    # check_T3(thermal, sample_thermal)
+    # check_T3_selftest(thermal, sample_thermal)
+    # check_T3E(thermal, sample_thermal)
+    # check_T3E_selftest(thermal, sample_thermal)
+    check_T2(rotate_dir)
+    check_T2_selftest()
