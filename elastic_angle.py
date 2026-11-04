@@ -8,7 +8,7 @@
 #  运行：Windows 的 openmc (3.10.20) 环境，Ctrl+F5（只用 h5py + numpy）
 # ============================================================
 
-import os
+import os,math
 import h5py
 import numpy as np
 
@@ -44,8 +44,58 @@ def load_elastic_angle(lib_dir,nucs):
             angle[nuc]={"E":ang_E,"cm":cm,"tables":tables}
     return angle
 
+def sample_elastic_mu(ang,E,rng):
+    E_g=ang["E"]
+    i=np.searchsorted(E_g,E,side="right")-1
+    i=min(max(0,i),len(E_g)-2)
+    f=((E-E_g[i])/(E_g[i+1]-E_g[i]))
+    f=min(max(0.0,f),1.0)
+    xi1=rng.random()
+    if f>xi1:
+        l=i+1
+    else:
+        l=i
+    tab=ang["tables"][l]
+    mu_v=tab["mu"]
+    pdf=tab["pdf"]
+    cdf=tab["cdf"]
+    xi2=rng.random()
+    j=np.searchsorted(cdf,xi2,side="right")-1
+    j=min(max(0.0,j),len(cdf)-2)
+    mu_j=mu_v[j]
+    mu_j1=mu_v[j+1]
+    p_j=pdf[j]
+    p_j1=pdf[j+1]
+    c_j=cdf[j]
+    s=(p_j1-p_j)/(mu_j1-mu_j)
+    if s==0.0:
+        d=(xi2-c_j)/p_j
+    else:
+        d=(math.sqrt(p_j**2+2*s*(xi2-c_j))-p_j)/s
+    mu=mu_j+d
+    mu=min(max(-1.0,mu),1.0)
+    return mu
+        
 if __name__ == "__main__":
     from check_elastic import check_A, check_A_selftest
     angle=load_elastic_angle(LIB, NUCS)
-    check_A(angle)
-    check_A_selftest(angle)
+    from rng import lcg
+    # check_A(angle)
+    # check_A_selftest(angle)
+    rng=lcg(20261104)
+    ang={
+        "E":[1.0,2.0],
+        "tables":[
+            {"mu":[-0.6, 0.2, 0.9],
+            "pdf":[0.35, 0.80, 0.55],
+            "cdf":[0, 0.46, 0.9325]
+            },
+            {"mu":[-0.6, 0.2, 0.9],
+            "pdf":[0.35, 0.80, 0.55],
+            "cdf":[0, 0.46, 0.9325]
+            }
+        ]
+    }
+    for i in range(5):
+        a=sample_elastic_mu(ang,1.5,rng)
+        print(a)
