@@ -18,6 +18,8 @@ import os
 import h5py
 import numpy as np
 from xs_lookup import LIB,sigma_at,find_cell,load_nuclide
+from thermal import sample_thermal,rotate_dir
+from elastic_angle import sample_elastic_mu
 
 def path_A_prob(y):
     return y*math.sqrt(math.pi)/(y*math.sqrt(math.pi)+2)
@@ -81,7 +83,7 @@ def norm(a):
     return math.sqrt(a[0]**2 + a[1]**2 + a[2]**2)
 
 
-def free_gas_kinematics(E, u, v, w, A, kT, x, mu_T, rng):
+def free_gas_kinematics(E, u, v, w, A, kT, x, mu_T, rng,mu_cm=None):
     """四步矢量变换（讲义 §4.3）。输入输出和原文完全一样：返回 E', u', v', w'。"""
     d = (u, v, w)                                         # 中子方向
     y = math.sqrt(E*A/kT)
@@ -114,7 +116,12 @@ def free_gas_kinematics(E, u, v, w, A, kT, x, mu_T, rng):
     vc = [vn[i] - vcm[i] for i in range(3)]
     s = norm(vc)
     # 5+6. CM 里各向同性抽新方向 q，乘同一个速率 s，加回质心速度 → LAB 新速度 vl
-    q = isotropic_direction(rng)
+    if mu_cm is None:
+        q=isotropic_direction(rng)
+    else:
+        dc=[vc[i]/s for i in range(3)]
+        phi=2*math.pi*rng.random()
+        q=rotate_dir(dc[0],dc[1],dc[2],mu_cm,phi)
     vl = [vcm[i] + q[i]*s for i in range(3)]
     L = norm(vl)
     # [Claude assert] 除以 L 之前 —— 抓：LAB 新速度为 0，方向无定义（④续 甲）
@@ -448,7 +455,7 @@ def start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng):
     return p, hist
 
 
-def lookup_xs(nuclides, idx, E):
+def lookup_xs(nuclides, idx, E,thermal=None):
     """在能量 E 处查好这一步要用的所有截面和「每 cm 记多少」的系数。飞行中 E 不变，所以每步查一次。
     M2 的 kerma 系数（Σ N_i·H_i(E)）以后就加在这里。原历史循环每步第 1–28 行。"""
     sig_ds=[]
@@ -457,6 +464,12 @@ def lookup_xs(nuclides, idx, E):
     kerco={}
     for j in range(len(nuclides)):
         Sig_j,tot_j=sigma_at_ext(nuclides[j]["E"],nuclides[j]["XS"],E)
+        if thermal is not None and j==idx["ind_H"] and E<thermal["E_max"]:
+            pl=nuclides[j]["mts"].index(2)
+            sig_old=Sig_j[pl]
+            sig_new=np.interp(E,thermal["xs_E"],thermal["xs_sig"])
+            Sig_j[pl]=sig_new
+            tot_j=tot_j-sig_old+sig_new
         Sigma_j = nuclides[j]["dens"] * tot_j * BARN
         sig_ds.append(Sig_j)
         sig_al.append(Sigma_j)
@@ -618,7 +631,7 @@ def fly(p, xs, hist, rng, d, dz, NL, t_cut):
     return has_sign
 
 
-def collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz):
+def collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz,thermal=None,angle=None):
     """撞一下：抽核素 → 抽道（模拟）或减权重 + 轮盘赌（隐式）→ 散射（改 E、方向，记 D_H）或吸收。
     改 p（E、u、v、w、wt）、hist、tal；返回这条中子还活着没有（False = 吸收或被轮盘赌杀掉，历史结束）。
     M3 的 S(α,β)、真实角分布都改在这里。原历史循环每步第 129–184 行。"""
@@ -675,17 +688,24 @@ def collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz):
         tal["n_i"]+=1
         hist["n_hist"]+=1
         E_be=E
-        if nuclides[jn]["awr"] is None:
+        nam=nuclides[jn]["name"]
+        if thermal is not None and nam=="H1" and E<thermal["E_max"]:
+            E,mu=sample_thermal(thermal,E,rng)
+            phi=2*math.pi*rng.random()
+            u,v,w=rotate_dir(u,v,w,mu,phi)
+        elif nuclides[jn]["awr"] is None:
             u,v,w=isotropic_direction(rng)
         else:
             A=nuclides[jn]["awr"]
             kT=nuclides[jn]["kT"]
             y=math.sqrt(E*A/kT)
             x1,mu_T,k2=sample_target(y,rng)
-            E,u,v,w=free_gas_kinematics(E,u,v,w,A,kT,x1,mu_T,rng)
+            mu_cm=None
+            if angle is not None and nam in angle:
+                mu_cm=sample_elastic_mu(angle[nam],E,rng)
+            E,u,v,w=free_gas_kinematics(E,u,v,w,A,kT,x1,mu_T,rng,mu_cm)
         k_hit=int(z/dz)
         hist["D_H"][k_hit]+=wt*(E_be-E)
-        nam=nuclides[jn]["name"]
         hist["d_his"][nam][k_hit]+=wt*(E_be-E)
         p["E"]=E
         p["u"]=u
@@ -748,7 +768,7 @@ def end_history(tal, hist, nuclides, NL):
     tal["v_sq"]+=x**2
 
 
-def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False, NL=20, src=None):
+def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False, NL=20, src=None, thermal=None, angle=None):
     if z_src is None:
         z_src=d/2
 
@@ -771,7 +791,7 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
         rng.state=jump(seed,i*S)
         p, hist = start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng)
         for step in range(Max):
-            xs = lookup_xs(nuclides, idx, p["E"])
+            xs = lookup_xs(nuclides, idx, p["E"], thermal)
             has_sign = fly(p, xs, hist, rng, d, dz, NL, t_cut)
             # 这一段飞完：漏出 / 截断 → 历史结束（三种结局的计数留在这里，一眼能看全）
             if p["z"]<0:
@@ -786,7 +806,7 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
                 tal["nt_cut"]+=1
                 tal["E_cut"].append(p["E"])
                 break
-            if not collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz):
+            if not collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz, thermal, angle):
                 break
         else:
             if t_cut==None:
