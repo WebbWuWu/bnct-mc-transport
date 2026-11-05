@@ -117,13 +117,15 @@ def rotate_dir(u,v,w,mu,phi):
         u_new=u*mu+a*(u*w*cos_phi-v*sin_phi)/b
         v_new=mu*v+a*(v*w*cos_phi+u*sin_phi)/b
         w_new=mu*w-a*b*cos_phi
-        return u_new,v_new,w_new
+        nrm=math.sqrt(u_new**2+v_new**2+w_new**2)
+        return u_new/nrm,v_new/nrm,w_new/nrm
     else:
         b=math.sqrt(1-v**2)
         u_new=mu*u+a*(u*v*cos_phi+w*sin_phi)/b
         v_new=mu*v-a*b*cos_phi
         w_new=mu*w+a*(v*w*cos_phi-u*sin_phi)/b
-        return u_new,v_new,w_new
+        nrm=math.sqrt(u_new**2+v_new**2+w_new**2)
+        return u_new/nrm,v_new/nrm,w_new/nrm
 
 if __name__=="__main__":
     thermal=load_thermal(SAB_PATH,T_TAG)
