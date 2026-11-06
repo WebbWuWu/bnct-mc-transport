@@ -12,7 +12,7 @@ import os,math
 import h5py
 import numpy as np
 
-LIB = r"E:\BNCT_GPU\lib80x_hdf5"     # 截面库目录（和 lesson12_elastic_angle.py 同一个）
+LIB = r"E:\BNCT_GPU\lib80x_hdf5" if os.name == "nt" else "/mnt/e/BNCT_GPU/lib80x_hdf5"   # 截面库目录；11/6：Windows / WSL（OpenMC 那边）都能 import
 NUCS = ("H1", "O16")                 # 水模体里要换真实角分布的两个核素
 
 for _nuc in NUCS:

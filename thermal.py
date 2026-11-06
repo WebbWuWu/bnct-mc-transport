@@ -13,7 +13,8 @@ import numpy as np
 from check_thermal import check_T1,check_T1_selftest,check_T3E,check_T3E_selftest,check_T3,check_T3_selftest,check_T2,check_T2_selftest
 from rng import lcg
 
-SAB_PATH = os.path.join(r"E:\BNCT_GPU\lib80x_hdf5", "c_H_in_H2O.h5")   # 水里 H 的热散射库，约 629 MB
+_LIB_DIR = r"E:\BNCT_GPU\lib80x_hdf5" if os.name == "nt" else "/mnt/e/BNCT_GPU/lib80x_hdf5"   # 11/6：Windows / WSL（OpenMC 那边）都能 import
+SAB_PATH = os.path.join(_LIB_DIR, "c_H_in_H2O.h5")                    # 水里 H 的热散射库，约 629 MB
 T_TAG = "294K"                                                         # 只用 294K 这一档（M3 框架 ⑤）
 N_MU=20
 
