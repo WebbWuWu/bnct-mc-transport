@@ -464,7 +464,7 @@ def lookup_xs(nuclides, idx, E,thermal=None):
     kerco={}
     for j in range(len(nuclides)):
         Sig_j,tot_j=sigma_at_ext(nuclides[j]["E"],nuclides[j]["XS"],E)
-        if thermal is not None and j==idx["ind_H"] and E<thermal["E_max"]:
+        if thermal is not None and j==idx["ind_H"] and E<thermal["E_max"] and E>=thermal["E_in"][0]:
             pl=nuclides[j]["mts"].index(2)
             sig_old=Sig_j[pl]
             sig_new=np.interp(E,thermal["xs_E"],thermal["xs_sig"])
@@ -689,7 +689,7 @@ def collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz,thermal=None,an
         hist["n_hist"]+=1
         E_be=E
         nam=nuclides[jn]["name"]
-        if thermal is not None and nam=="H1" and E<thermal["E_max"]:
+        if thermal is not None and nam=="H1" and E<thermal["E_max"] and E>=thermal["E_in"][0]:
             E,mu=sample_thermal(thermal,E,rng)
             phi=2*math.pi*rng.random()
             u,v,w=rotate_dir(u,v,w,mu,phi)

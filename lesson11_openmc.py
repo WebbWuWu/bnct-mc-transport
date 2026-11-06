@@ -45,7 +45,7 @@ def water_total_tally(lst):
         ts.append(t_a)
     return ts
 
-def mater_water():
+def mater_water(sab=False):
     nuc_awr={}
     for name in nucs_w:
         path=os.path.join(fold,name+".h5")
@@ -69,6 +69,8 @@ def mater_water():
     wat.add_nuclide('B10',share_B,'wo')
     wat.set_density('g/cm3', rho_w)
     wat.temperature=294
+    if sab:
+        wat.add_s_alpha_beta("c_H_in_H2O")
     return wat
 
 if __name__ == "__main__":
