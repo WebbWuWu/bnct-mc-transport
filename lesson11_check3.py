@@ -103,13 +103,15 @@ def total_z(m1, s1, m2, s2):
     return (m1 - m2) / math.sqrt(s1 ** 2 + s2 ** 2)
 
 
-if __name__ == "__main__":
-    omc_name = sys.argv[1] if len(sys.argv) > 1 else OMC_DEFAULT
-    with open(os.path.join(OUT_DIR, MY_JSON), "r") as f:
+# ---- 11/6 Claude：把原来 __main__ 里的内容原样包成函数（只把 MY_JSON 换成参数 my_json，末尾加 return），
+#      给 M3 的 check3_m3.py 复用。默认参数 = 原来的两个文件，Ctrl+F5 跑本文件输出和以前逐字相同。----
+def run_check3(my_json=MY_JSON, omc_name=OMC_DEFAULT, out_name=None):
+    # out_name：逐层结果存成的文件名（11/6 加，诊断时同一个 OpenMC 结果要比好几次，免得互相盖掉）；None = 原来的 check3_<OpenMC 文件名>.json
+    with open(os.path.join(OUT_DIR, my_json), "r") as f:
         mine = json.load(f)
     with open(os.path.join(OUT_DIR, omc_name), "r") as f:
         omc = json.load(f)
-    print("你的：%s（N = %d）   vs   OpenMC：%s\n" % (MY_JSON, N_HIST, omc_name))
+    print("你的：%s（N = %d）   vs   OpenMC：%s\n" % (my_json, N_HIST, omc_name))
 
     # ---- C1 前置 ----
     assert omc["batches"] == 100 and omc["particles"] == 100000, \
@@ -124,7 +126,7 @@ if __name__ == "__main__":
     print("C1 过：OpenMC 100 批 × 10 万；两边 4 个总量 = 各自 30 层之和\n")
 
     # ---- C2 + C3 ----
-    report = {"mine": MY_JSON, "openmc": omc_name, "items": {}}
+    report = {"mine": my_json, "openmc": omc_name, "items": {}}
     print("%-12s %9s %5s   %9s %4s %16s %6s   %s" % ("量", "总量 z", "C2", "形状 Q", "层数", "门槛", "C3", "z̄（30 层一起偏多少）"))
     all_ok = True
     for name, sk, qk, sub, t30, ttot, mtk, mtq, coe, rho in TABLE:
@@ -173,8 +175,13 @@ if __name__ == "__main__":
 
     # ---- 存 + 总结论 ----
     stem = os.path.splitext(omc_name)[0]
-    path = os.path.join(OUT_DIR, "check3_" + stem + ".json")
+    path = os.path.join(OUT_DIR, out_name if out_name is not None else "check3_" + stem + ".json")
     with open(path, "w") as f:
         json.dump(report, f)
     print("\n逐层结果存好：%s" % path)
     print("判据 3（丙）：%s" % ("全过" if all_ok else "有不过的量（✗）—— 看上面逐层 z，去查偏差"))
+    return all_ok, report
+
+
+if __name__ == "__main__":
+    run_check3(MY_JSON, sys.argv[1] if len(sys.argv) > 1 else OMC_DEFAULT)

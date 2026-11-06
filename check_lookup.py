@@ -18,6 +18,8 @@
 #           和第一次逐位相同
 #    [T5-3] 10 eV 以下：H1 的 MT=2 = 判据自己读库插值（0.0253 eV 还要和 10/31 的 51.69 b 对上）；   抓：先用后改（Σ 没跟着变）、
 #           tot 变化量 = 新 − 旧；H1 的 Σ = N·tot·BARN；Sigma_t = 各核素 Σ 之和                        只加新不减旧、插值插错数组
+#    🆕 [T5-4]（11/6 加）S(α,β) 表的最低能量以下（取表下限的一半）：和不传 thermal 的逐位相同   抓：表外也换（11/6 用户定乙：
+#           表下限以下截面、运动学都走自由 H —— 起因：种子 1011 在表下限以下「修正 E′」抽出负能量，sigma_at_ext 的断言响了）
 #  门槛在看数据之前定：「逐位相同」用 ==；算出来的量相对差 < 1e-12（只差浮点舍入）；51.69 容差 0.01 b
 #  盲区：只查 4 个能量点；10 eV 两边截面接不接得上（物理上差 < 1%）不在这里查 —— 小跑通看通量谱有没有台阶
 # ============================================================
@@ -132,7 +134,14 @@ def check_T5(lookup_xs, nuclides, idx, thermal, quiet=False):
         if not quiet:
             print("T5-3 ✅ E = %-6g eV · H1 MT=2 %.4f b（自由 H %.4f b）· tot_ls[H1] %+.4f b · Sigma_t %.5f → %.5f /cm（× %.3f）"
                   % (E, got, old["sig_ds"][H][pl], d_tot, old["Sigma_t"], new["Sigma_t"], new["Sigma_t"] / old["Sigma_t"]))
+
+    # [T5-4] 11/6：表的最低能量以下也不该换（乙方案）—— 用判据自己读的能量网格（xs_E），不用 thermal 里的
+    E_low = 0.5 * float(xs_E[0])
+    new = lookup_xs(nuclides, idx, E_low, thermal)
+    old = lookup_xs(nuclides, idx, E_low)
+    assert _same(new, old), "[T5-4] E = %g eV（表下限 %g eV 的一半）不该换，可这些变了：%s" % (E_low, xs_E[0], _diff_keys(new, old, nuclides))
     if not quiet:
+        print("T5-4 ✅ E = %g eV（表下限 %g eV 的一半）：和不传 thermal 逐位相同（表外不换）" % (E_low, xs_E[0]))
         print("判据 T5 过")
 
 
@@ -149,7 +158,7 @@ def _apply(xs, nuclides, j, sig_new, minus_old=True):
 
 
 def check_T5_selftest(lookup_xs, nuclides, idx, thermal):
-    """纪律 4：4 种故意写错的必须响，而且响对的那一条。都是包在你的 lookup_xs 外面造错，不改你的文件。"""
+    """纪律 4：5 种故意写错的必须响，而且响对的那一条。都是包在你的 lookup_xs 外面造错，不改你的文件。"""
     xs_E, xs_sig, E_max = t5_read_xs()
     H = idx["ind_H"]
     O = [n["name"] for n in nuclides].index("O16")
@@ -173,6 +182,10 @@ def check_T5_selftest(lookup_xs, nuclides, idx, thermal):
         new["Sigma_t"] = old["Sigma_t"]
         return new
 
+    def below(nuc, ix, E, th=None):              # 11/6 前的写法：表下限以下也换（只看 E < E_max）
+        old = lookup_xs(nuc, ix, E)
+        return _apply(old, nuc, H, sig(E)) if (th is not None and E < E_max) else old
+
     def no_minus(nuc, ix, E, th=None):           # 只加新不减旧
         old = lookup_xs(nuc, ix, E)
         return _apply(old, nuc, H, sig(E), minus_old=False) if (th is not None and E < E_max) else old
@@ -180,7 +193,8 @@ def check_T5_selftest(lookup_xs, nuclides, idx, thermal):
     cases = [("< 写成 >", gt, "[T5-1]"),
              ("挂错核素（O16）", on_O, "[T5-2]"),
              ("先用后改", late, "[T5-3]"),
-             ("只加新不减旧", no_minus, "[T5-3]")]
+             ("只加新不减旧", no_minus, "[T5-3]"),
+             ("表下限以下也换", below, "[T5-4]")]
     for what, bad, tag_want in cases:
         try:
             check_T5(bad, nuclides, idx, thermal, quiet=True)
@@ -190,7 +204,7 @@ def check_T5_selftest(lookup_xs, nuclides, idx, thermal):
             print("自检 ✅ %-14s → %s 响了" % (what, tag))
             continue
         raise AssertionError("自检：「%s」没有任何一条响 —— 判据有漏洞，截图给 Claude" % what)
-    print("判据 T5 自检全过：4 种错都响了，而且响的是对的那一条")
+    print("判据 T5 自检全过：5 种错都响了，而且响的是对的那一条")
 
 
 if __name__ == "__main__":
