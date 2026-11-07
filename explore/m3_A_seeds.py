@@ -24,7 +24,7 @@ from lesson08_dose import kur_table, KEEP_FACTOR, D, NL, OUT_DIR, save_result
 from elastic_angle import load_elastic_angle, LIB, NUCS
 
 N_SEED = 20000
-SEEDS = range(3001, 3011)
+SEEDS = range(3001, 3031)   # 11/7 Claude 改（用户定甲）：3011–3030 补 20 个，已有的 3001–3010 自动跳过
 
 if __name__ == "__main__":
     edges, shares = kur_table()
