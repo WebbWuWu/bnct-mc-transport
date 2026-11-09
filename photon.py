@@ -9,12 +9,15 @@
 import os, math
 import h5py
 import numpy as np
+from rng import isotropic_direction
 
 _LIB_DIR = r"E:\BNCT_GPU\lib80x_hdf5" if os.name == "nt" else "/mnt/e/BNCT_GPU/lib80x_hdf5"   # Windows / WSL 都能 import
 PHOTON_DIR = os.path.join(_LIB_DIR, "photon")
 
 PHOTON_ELEMS = ["H", "O", "B"]                       # 水 + 硼里用到的元素（光子只认元素，不认同位素）
 NUC2ELEM = {"H1": "H", "O16": "O", "B10": "B"}       # nuclides 里的 "name" → 光子库的元素名
+E_G_H=2.2233e6
+E_G_B=0.4778e6
 
 def loglog0(x,y,e):
     lo=np.searchsorted(x,e,side="right")-1
@@ -48,7 +51,29 @@ def photon_sigma(photon,nuclides,E):
             sig[k]+=loglog0(photon[elem]["E"],photon[elem][k],E)*(1e-24)*dens
     sig["tot"]=sig["coh"]+sig["incoh"]+sig["pe"]+sig["pair"]
     return sig
-        
+
+def emit_photons(p,xs,hist,rng):
+    sig_cap=xs["gH_coe"]+xs["gB_coe"]
+    y=sig_cap/xs["Sigma_t"]
+    xi=rng.random()
+    n=int(xi+y)
+    for i in range(n):
+        dic={}
+        xi1=rng.random()
+        share=xs["gH_coe"]/sig_cap
+        if share>xi1:
+            E_g=E_G_H
+        else:
+            E_g=E_G_B
+        u,v,w=isotropic_direction(rng)
+        dic["z"]=p["z"]
+        dic["u"]=u
+        dic["v"]=v
+        dic["w"]=w
+        dic["E"]=E_g
+        dic["wt"]=p["wt"]
+        hist["pstack"].append(dic)
+    return n 
 
 if __name__=="__main__":
     from lesson11_water import kur_table,KEEP_FACTOR,build_water

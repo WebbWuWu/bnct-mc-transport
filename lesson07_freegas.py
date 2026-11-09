@@ -20,6 +20,7 @@ import numpy as np
 from xs_lookup import LIB,sigma_at,find_cell,load_nuclide
 from thermal import sample_thermal,rotate_dir
 from elastic_angle import sample_elastic_mu
+from photon import emit_photons
 
 def path_A_prob(y):
     return y*math.sqrt(math.pi)/(y*math.sqrt(math.pi)+2)
@@ -451,7 +452,7 @@ def start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng):
     p={"z":z, "u":u, "v":v, "w":w, "E":E, "wt":wt, "t":t}
     hist={"track_h":track_h, "B_r":B_r, "B_c":B_c, "N_ar":N_ar, "a_g":a_g, "D_H":D_H,
           "d_his":d_his, "n_hist":n_hist, "tol_sigt_s":tol_sigt_s,"kerma_h":kerma_h
-          ,"gH_h":gH_h,"gB_h":gB_h}
+          ,"gH_h":gH_h,"gB_h":gB_h,"pstack":[]}
     return p, hist
 
 
@@ -631,7 +632,7 @@ def fly(p, xs, hist, rng, d, dz, NL, t_cut):
     return has_sign
 
 
-def collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz,thermal=None,angle=None):
+def collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz,thermal=None,angle=None,gamma=False):
     """撞一下：抽核素 → 抽道（模拟）或减权重 + 轮盘赌（隐式）→ 散射（改 E、方向，记 D_H）或吸收。
     改 p（E、u、v、w、wt）、hist、tal；返回这条中子还活着没有（False = 吸收或被轮盘赌杀掉，历史结束）。
     M3 的 S(α,β)、真实角分布都改在这里。原历史循环每步第 129–184 行。"""
@@ -656,6 +657,8 @@ def collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz,thermal=None,an
     sigma_s=sum(sig_s)
     for j in range(len(nuclides)):
         share2[j]=sig_s[j]/sigma_s
+    if gamma:
+        emit_photons(p,xs,hist,rng)
     if implicit==False:
         if len_nuc==1:
             jn=0
@@ -768,7 +771,7 @@ def end_history(tal, hist, nuclides, NL):
     tal["v_sq"]+=x**2
 
 
-def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False, NL=20, src=None, thermal=None, angle=None):
+def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False, NL=20, src=None, thermal=None, angle=None,gamma=False):
     if z_src is None:
         z_src=d/2
 
@@ -806,7 +809,7 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
                 tal["nt_cut"]+=1
                 tal["E_cut"].append(p["E"])
                 break
-            if not collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz, thermal, angle):
+            if not collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz, thermal, angle,gamma):
                 break
         else:
             if t_cut==None:
