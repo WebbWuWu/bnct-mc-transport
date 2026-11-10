@@ -4,10 +4,10 @@
 #  Claude 2026-11-06 写（跑的脚本，不默写）
 #
 #  运行：Windows 的 openmc (3.10.20) 环境，打开本文件 Ctrl+F5（只用 h5py + numpy）。约 15–25 分钟，中间不打印，别关。
-#  输入和 M2 交付那次（lesson11_water.py 主程序）一模一样：KUR 源、z_src = 0、隐式俘获、15 cm、30 层、N = 10 万、种子 1010；
+#  输入和 M2 交付那次（water.py 主程序）一模一样：KUR 源、z_src = 0、隐式俘获、15 cm、30 层、N = 10 万、种子 1010；
 #  只多两个参数 thermal、angle（和 11/5 m3_smoke.py 的「+S+A」那一种一样，只是 N 从 3000 换成 10 万）。
 #  存：outputs\water_SA_N100000_s1010.json / .npz（SA = S(α,β) + Angle）。已经存在就不重跑。
-#  下一步：Ctrl+F5 跑 my_code\check3_m3.py（要先在 WSL 跑完 explore/m3_water_openmc.py）。
+#  下一步：Ctrl+F5 跑 my_code\check_M3_3.py（要先在 WSL 跑完 explore/m3_water_openmc.py）。
 # ============================================================
 
 import os
@@ -17,9 +17,9 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))          # my_code 根目录：本文件在 my_code\explore\ 里
 
-from lesson07_freegas import run_slab
-from lesson11_water import build_water
-from lesson08_dose import kur_table, KEEP_FACTOR, D, NL, N, SEED, OUT_DIR, save_result
+from transport import run_slab
+from water import build_water
+from dose import kur_table, KEEP_FACTOR, D, NL, N, SEED, OUT_DIR, save_result
 from thermal import load_thermal, SAB_PATH, T_TAG
 from elastic_angle import load_elastic_angle, LIB, NUCS
 

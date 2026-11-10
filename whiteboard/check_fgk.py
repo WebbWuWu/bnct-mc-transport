@@ -4,7 +4,7 @@
 #  Claude 2026-10-10 写。用法：把下面 MOD 改成你默写稿的文件名（不带 .py），Ctrl+F5。
 # ============================================================
 #
-#  两条路：lesson07_freegas.free_gas_kinematics（原文，10/3 判据全过的那份）
+#  两条路：transport.free_gas_kinematics（原文，10/3 判据全过的那份）
 #          vs  你的默写稿里同名函数
 #  同一组输入、同一个种子 → 四个返回值必须【逐位相同】（==，不是「差不多」），
 #  而且两边用掉的随机数个数也要一样（看发生器跑完后的 state）。
@@ -18,13 +18,13 @@ import sys
 import math
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.dirname(HERE))      # my_code 根目录：rng、lesson07_freegas 在那里
+sys.path.insert(0, os.path.dirname(HERE))      # my_code 根目录：rng、transport 在那里
 sys.path.insert(0, HERE)                       # whiteboard：默写稿在这里
 
 MOD = "rewrite_fgk1"                           # ← 改成你的默写稿文件名
 
 from rng import lcg
-from lesson07_freegas import free_gas_kinematics as fgk_ref, sample_target
+from transport import free_gas_kinematics as fgk_ref, sample_target
 mine = __import__(MOD)
 fgk_mine = mine.free_gas_kinematics
 

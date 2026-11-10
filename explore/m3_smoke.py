@@ -4,7 +4,7 @@
 #  Claude 2026-11-05 写（跑的脚本，不默写）
 #
 #  运行：Windows 的 openmc (3.10.20) 环境，打开本文件 Ctrl+F5（只用 h5py + numpy）。
-#  三种跑法，同一个种子、同样的输入（和 lesson11_water.py 交付那次一样：KUR 源、z_src = 0、隐式、15 cm、30 层）：
+#  三种跑法，同一个种子、同样的输入（和 water.py 交付那次一样：KUR 源、z_src = 0、隐式、15 cm、30 层）：
 #    M2   ：thermal = None、angle = None（= 老程序）
 #    +S   ：只开 S(α,β)
 #    +S+A ：S(α,β) + 弹性真实角分布（H1、O16）
@@ -24,9 +24,9 @@ import math
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))          # my_code 根目录：本文件在 my_code\explore\ 里
 
-from lesson07_freegas import run_slab
-from lesson11_water import build_water
-from lesson08_dose import kur_table, KEEP_FACTOR, D, NL
+from transport import run_slab
+from water import build_water
+from dose import kur_table, KEEP_FACTOR, D, NL
 from thermal import load_thermal, SAB_PATH, T_TAG
 from elastic_angle import load_elastic_angle, LIB, NUCS
 

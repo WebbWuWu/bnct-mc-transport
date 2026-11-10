@@ -23,9 +23,9 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))          # my_code 根目录：本文件在 my_code\explore\ 里
 
-from lesson07_freegas import run_slab
-from lesson08_dose import build_tissue, kur_table, KEEP_FACTOR, D, NL, N, T, OUT_DIR, save_result
-from lesson11_mt301 import load_heating
+from transport import run_slab
+from dose import build_tissue, kur_table, KEEP_FACTOR, D, NL, N, T, OUT_DIR, save_result
+from heating import load_heating
 from elastic_angle import load_elastic_angle, LIB, NUCS
 
 SEEDS = (1010, 1200) + tuple(range(2001, 2009))     # 1010、1200 = 和 11/6 那次（角分布关）同种子（已跑完，自动跳过）；

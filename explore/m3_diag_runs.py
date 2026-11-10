@@ -9,7 +9,7 @@
 #              → 存 outputs\water_M2new_N100000_s1010.json（不盖 10/24 旧发生器的 water_N100000_s1010.json）
 #    乙 SA1011：S(α,β) + 角分布都开，种子 1011（换一个种子）
 #              → 存 outputs\water_SA_N100000_s1011.json
-#  已经存在的就跳过。跑完 Ctrl+F5 跑 my_code\check3_diag.py。
+#  已经存在的就跳过。跑完 Ctrl+F5 跑 my_code\check_M3_diag.py。
 # ============================================================
 
 import os
@@ -19,9 +19,9 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))          # my_code 根目录：本文件在 my_code\explore\ 里
 
-from lesson07_freegas import run_slab
-from lesson11_water import build_water
-from lesson08_dose import kur_table, KEEP_FACTOR, D, NL, N, SEED, OUT_DIR, save_result
+from transport import run_slab
+from water import build_water
+from dose import kur_table, KEEP_FACTOR, D, NL, N, SEED, OUT_DIR, save_result
 from thermal import load_thermal, SAB_PATH, T_TAG
 from elastic_angle import load_elastic_angle, LIB, NUCS
 
@@ -49,4 +49,4 @@ if __name__ == "__main__":
               % ((time.time() - t0) / 60, r["coll_per_hist"], r["frac_T"], r["frac_R"]))
         save_result(r, stem)
         print("  存好：%s.json" % fname)
-    print("两样都好了 → Ctrl+F5 跑 my_code\\check3_diag.py")
+    print("两样都好了 → Ctrl+F5 跑 my_code\\check_M3_diag.py")

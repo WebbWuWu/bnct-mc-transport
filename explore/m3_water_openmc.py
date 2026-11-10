@@ -6,11 +6,20 @@
 #  只在 WSL 里跑（不要 F5 / Ctrl+F5）：
 #    先输 wsl → conda activate /home/siyiwu/miniconda3/envs/openmc → cd /mnt/e/BNCT_GPU/my_code
 #    → python explore/m3_water_openmc.py            （默认只跑种子 1，约 2–3 分钟）
-#  和 lesson11_openmc.py 主程序一模一样（同一张 tally 清单、100 批 × 10 万、同一个 run()），只差两处：
+#  和 openmc_water.py 主程序一模一样（同一张 tally 清单、100 批 × 10 万、同一个 run()），只差两处：
 #    ① 材料 mater_water(sab=True)  ② 文件夹 / json 名字带 sab（不盖掉 10/24 的 openmc_water_s*.json）
-#  存：outputs/openmc/water_sab_s1/（OpenMC 输入输出）· outputs/openmc_water_sab_s1.json（check3_m3.py 读）
-#  要补量 ρ̄ 才带种子号：python explore/m3_water_openmc.py 2 3 4 5 6 7 8 9 10（check3_m3.py 文件头说什么时候要）
+#  存：outputs/openmc/water_sab_s1/（OpenMC 输入输出）· outputs/openmc_water_sab_s1.json（check_M3_3.py 读）
+#  要补量 ρ̄ 才带种子号：python explore/m3_water_openmc.py 2 3 4 5 6 7 8 9 10（check_M3_3.py 文件头说什么时候要）
 # ============================================================
+
+# ---- 路径（2026-11-10 整理文件夹，Claude 加）：本文件在 my_code 的子文件夹里。
+#      下面几行把 my_code 根目录和各子文件夹加进搜索路径，后面的 import 才找得到别的文件。----
+import os, sys
+_MY_CODE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # my_code 根目录
+for _sub in ("whiteboard", "lessons", "openmc_compare", "checks", ""):
+    _p = os.path.join(_MY_CODE, _sub) if _sub else _MY_CODE
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 import os
 import sys
@@ -20,9 +29,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))          # my_code 根目录：本文件在 my_code/explore/ 里
 
 import openmc
-from lesson09_openmc import kur, run, tallies, path1
-from lesson11_openmc import mater_water, water_tally, water_total_tally, WATER_TALLIES, WATER_TOTAL_TALLIES
-from lesson08_dose import OUT_DIR
+from openmc_tissue import kur, run, tallies, path1
+from openmc_water import mater_water, water_tally, water_total_tally, WATER_TALLIES, WATER_TOTAL_TALLIES
+from dose import OUT_DIR
 
 if __name__ == "__main__":
     seeds = [int(a) for a in sys.argv[1:]] or [1]

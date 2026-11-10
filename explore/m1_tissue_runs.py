@@ -4,14 +4,14 @@
 #  Claude 2026-11-06 写（跑的脚本，不默写）
 #
 #  运行：Windows 的 openmc (3.10.20) 环境，打开本文件 Ctrl+F5。两个种子先后跑，共约 20–30 分钟。
-#  跑什么：M1 的软组织问题（lesson08_dose 的 ICRU-44 软组织 H/C/N/O + 15 ppm B10、ρ = 1.06、KUR 源、z_src = 0、
+#  跑什么：M1 的软组织问题（dose 的 ICRU-44 软组织 H/C/N/O + 15 ppm B10、ρ = 1.06、KUR 源、z_src = 0、
 #          隐式俘获、15 cm、30 层、10 万条），和 M1 只差三处：
 #    ① 新发生器（10/31 乙方案）       → 回答技术报告 4.5「D_B 深处低 2–3% 是不是随机数重叠」
 #    ② 每个核素加上 MT=301「heat」     → run_slab 会按核素记 kerma（M2 的记账），回答追查 ①「换成 kerma 还差不差 20%」
 #    ③ 种子和 M1 一样：1010、1200     → 新旧发生器同种子
 #  S(α,β)、角分布都关（thermal = None、angle = None）：和 M1 的 OpenMC（不开 S(α,β)）一一对应。
-#  核素表用你 lesson08_dose.py 的 build_tissue（不改它），这里只给每个核素字典加一个 "heat" 键 ——
-#  和 lesson11_water.build_water 里 heat 的来源（lesson11_mt301.load_heating）一模一样。
+#  核素表用你 dose.py 的 build_tissue（不改它），这里只给每个核素字典加一个 "heat" 键 ——
+#  和 water.build_water 里 heat 的来源（heating.load_heating）一模一样。
 #  存：outputs\tissue_kerma_N100000_s1010.json、..._s1200.json。已经存在就跳过。跑完 Ctrl+F5 跑 my_code\check_tissue.py。
 # ============================================================
 
@@ -24,9 +24,9 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))          # my_code 根目录：本文件在 my_code\explore\ 里
 
-from lesson07_freegas import run_slab
-from lesson08_dose import build_tissue, kur_table, KEEP_FACTOR, D, NL, N, T, OUT_DIR, save_result
-from lesson11_mt301 import load_heating
+from transport import run_slab
+from dose import build_tissue, kur_table, KEEP_FACTOR, D, NL, N, T, OUT_DIR, save_result
+from heating import load_heating
 
 SEEDS = (1010, 1200)                                # M1 用过的两个种子
 

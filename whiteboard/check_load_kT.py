@@ -2,7 +2,7 @@
 # ============================================================
 #  check_load_kT.py —— 默写 load_kT + sigma_at_ext 的对拍（Claude 10/16 写）
 #  运行：Windows，Ctrl+F5（要 h5py，读真库）。几秒。
-#  比什么：你的 whiteboard\rewrite_load_kT1.py 里的两个函数 vs 原函数（lesson07_freegas.py），逐位相同才算过
+#  比什么：你的 whiteboard\rewrite_load_kT1.py 里的两个函数 vs 原函数（transport.py），逐位相同才算过
 #    ① load_kT：H1、O16 的 294K（两个核素，防止「只对 H1」）
 #    ② sigma_at_ext：第 6 课假库，3 个能量 —— 低于表下限（外推）、正好在表下限、表里面（不外推）
 #    ③ sigma_at_ext：真库 H1 在表下限以下 3.1e-6 eV（真表的道数 > 2，抓「只写对两个道」）
@@ -11,11 +11,11 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.dirname(HERE))      # my_code 根目录：lesson07_freegas、xs_lookup 在那里
+sys.path.insert(0, os.path.dirname(HERE))      # my_code 根目录：transport、xs_lookup 在那里
 sys.path.insert(0, HERE)                       # whiteboard：默写稿在这里
 
 MOD = "rewrite_load_kT1"                       # 你的默写文件名（不带 .py）
-from lesson07_freegas import load_kT as kT_ref, sigma_at_ext as ext_ref
+from transport import load_kT as kT_ref, sigma_at_ext as ext_ref
 from xs_lookup import load_nuclide
 mine = __import__(MOD)
 

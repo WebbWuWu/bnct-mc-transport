@@ -2,7 +2,8 @@ import os
 import h5py
 import numpy as np
 
-LIB    = r"E:\BNCT_GPU\lib80x_hdf5"
+from lib_path import LIB_DIR
+LIB    = LIB_DIR                # 11/10：库路径统一写在 lib_path.py（值没变）
 NUC    = "B10"
 T      = "294K"
 E_TEST = 0.0253

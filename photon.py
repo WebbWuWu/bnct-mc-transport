@@ -10,8 +10,8 @@ import os, math
 import h5py
 import numpy as np
 from rng import isotropic_direction
-
-_LIB_DIR = r"E:\BNCT_GPU\lib80x_hdf5" if os.name == "nt" else "/mnt/e/BNCT_GPU/lib80x_hdf5"   # Windows / WSL 都能 import
+from lib_path import LIB_DIR
+_LIB_DIR = LIB_DIR                                   # 11/10：库路径统一写在 lib_path.py（值没变）
 PHOTON_DIR = os.path.join(_LIB_DIR, "photon")
 
 PHOTON_ELEMS = ["H", "O", "B"]                       # 水 + 硼里用到的元素（光子只认元素，不认同位素）
@@ -76,7 +76,7 @@ def emit_photons(p,xs,hist,rng):
     return n 
 
 if __name__=="__main__":
-    from lesson11_water import kur_table,KEEP_FACTOR,build_water
+    from water import kur_table,KEEP_FACTOR,build_water
     pho=load_photon()
     for elm in PHOTON_ELEMS:
         print(elm,len(pho[elm]["E"]),pho[elm]["E"][0],pho[elm]["E"][-1],len(pho[elm]["pair"]))

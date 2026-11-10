@@ -10,10 +10,10 @@
 import os,math
 import h5py
 import numpy as np
-from check_thermal import check_T1,check_T1_selftest,check_T3E,check_T3E_selftest,check_T3,check_T3_selftest,check_T2,check_T2_selftest
 from rng import lcg
+from lib_path import LIB_DIR
 
-_LIB_DIR = r"E:\BNCT_GPU\lib80x_hdf5" if os.name == "nt" else "/mnt/e/BNCT_GPU/lib80x_hdf5"   # 11/6：Windows / WSL（OpenMC 那边）都能 import
+_LIB_DIR = LIB_DIR                                                   # 11/10：库路径统一写在 lib_path.py（值没变）
 SAB_PATH = os.path.join(_LIB_DIR, "c_H_in_H2O.h5")                    # 水里 H 的热散射库，约 629 MB
 T_TAG = "294K"                                                         # 只用 294K 这一档（M3 框架 ⑤）
 N_MU=20
@@ -129,6 +129,9 @@ def rotate_dir(u,v,w,mu,phi):
         return u_new/nrm,v_new/nrm,w_new/nrm
 
 if __name__=="__main__":
+    import sys                                                         # 11/10：判据挪进 checks\，只有直接跑本文件时才 import 它（以前写在文件开头）
+    sys.path.insert(0,os.path.join(os.path.dirname(os.path.abspath(__file__)),"checks"))
+    from check_thermal import check_T1,check_T1_selftest,check_T3E,check_T3E_selftest,check_T3,check_T3_selftest,check_T2,check_T2_selftest
     thermal=load_thermal(SAB_PATH,T_TAG)
     print(thermal["E_max"],len(thermal["xs_E"]),np.interp(0.0253,thermal["xs_E"], thermal["xs_sig"]))
     print(len(thermal["tables"]),thermal["tables"][48]["mu"].shape,thermal["tables"][48]["cdf"][-1],np.array_equal(thermal["xs_E"], thermal["E_in"]))

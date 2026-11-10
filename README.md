@@ -2,14 +2,38 @@
 
 一个从零手写的蒙特卡罗中子输运程序。
 
-最终目标是 **GPU 加速的 BNCT 剂量计算引擎**；本仓库当前处于 **Python 参考实现阶段**，
-Python 版已与 OpenMC 逐层对拍（第 9、11、12 课），之后重写为 C++ 并移植到 CUDA。
+最终目标是 **GPU 加速的 BNCT 剂量计算引擎**；本仓库当前处于 **Python 参考实现阶段**（一维平板几何），
+Python 版已与 OpenMC 逐层对拍（第 9、11、12 课）。接下来的顺序：γ 光子输运（进行中）→ 加速 → 三维几何。
 
 > **程序本体的代码行由我自己敲**（随机数、抽样、截面、输运、打分、剂量、OpenMC 输入、出图）。
 > 部分文件起步时由 AI 助手给出框架 —— 文件头注释、函数签名、步骤注释或填空脚手架（文件名带 `scaffold` 或文件头注明），函数体由我写。
-> 判据脚本（`lesson*_check*.py`、`check_*.py`）和 `lesson08_dose.py` 的物理常数块由 AI 助手写；`run_slab` 拆成小函数的重构也由 AI 助手做（算法一字不动，`check_split.py` 逐位回归）；判据的门槛由我定；这些提交都标了 Co-Authored-By。
+> 判据脚本（`checks/` 里的 `check_*.py`）和 `dose.py` 的物理常数块由 AI 助手写；`run_slab` 拆成小函数的重构也由 AI 助手做（算法一字不动，`checks/check_split.py` 逐位回归）；判据的门槛由我定；这些提交都标了 Co-Authored-By。
 > 第 12 课（S(α,β) + 真实角分布）：`thermal.py`、`elastic_angle.py` 里的函数和 `lookup_xs` / `collide` / `free_gas_kinematics` 新加的物理由我写；两个新文件的文件头（import、库路径）、`run_slab` 新参数的往下传、`explore/` 下批量跑种子的脚本由 AI 助手写。
+> 2026-11-10 的文件夹整理和文件改名也由 AI 助手做（算法未动；改前改后同一组输入的结果逐位相同，`checks/run_all.py` 全过）。
 > 提交历史就是开发过程本身，包括每一次踩坑和修正。
+
+---
+
+## 文件夹结构（2026-11-10 整理）
+
+根目录只放**程序本体**，其余按用途分文件夹：
+
+| 位置 | 放什么 |
+|---|---|
+| `transport.py` | **中子输运主程序**：`run_slab`（一维平板、连续能量、自由气体热运动、隐式俘获、径迹长度 / 碰撞估计器） |
+| `rng.py` `xs_lookup.py` `sample_reaction.py` `heating.py` | 随机数（模 2⁶³ LCG + 每条历史跳跃）· 读截面 / 查截面 · 抽反应道 · 读 kerma 系数（MT=301） |
+| `thermal.py` `elastic_angle.py` `photon.py` | 水的 S(α,β) · 弹性散射真实角分布 · γ 光子（进行中） |
+| `dose.py` `water.py` `mcstat.py` | 源谱（KUR 三群）+ 软组织 + Gy 换算 · 水模体 · 统计工具 |
+| `lib_path.py` | 截面库路径（只写这一处） |
+| `checks/` | **全部判据**。`check_主题.py`（如 `check_split.py` 逐位回归）；按课 / 里程碑编号的是 `check_L07_1.py`、`check_M3_3.py` 这种。`run_all.py` 一条命令跑一遍 |
+| `openmc_compare/` | 和 OpenMC 对拍：OpenMC 输入（`openmc_*.py`）、逐层比较（`compare_*.py`）、出图（`plot_*.py`） |
+| `lessons/` | 前几课的练习脚本（第 3–6 课等），程序本体不依赖它们 |
+| `explore/` `archive/` `whiteboard/` `specs/` `docs/` | 探路脚本 · 第 1–2 课旧稿 · 手写练习 · 规格书 · 说明文档 |
+| `data/` `outputs/` | 判据用的参考数据（NIST / XCOM）· 结果和图 |
+
+改名对照（提交历史和旧文档里出现的是旧名）：`lesson07_freegas.py` → `transport.py` · `lesson08_dose.py` → `dose.py` · `lesson11_water.py` → `water.py` · `lesson11_mt301.py` → `heating.py` · `lesson09_openmc.py` → `openmc_compare/openmc_tissue.py` · `lesson11_openmc.py` → `openmc_compare/openmc_water.py` · `lessonNN_checkX.py` → `checks/check_LNN_X.py` · `lesson11_check3.py` → `checks/check_M2_3.py` · `check3_m3*.py` → `checks/check_M3_3*.py`。
+
+路线：现在是 Python 参考实现（一维平板）。γ 光子输运做完后**先做加速，再做三维几何** —— 三维需要的历史数比一维多得多，纯 Python 已经跑得很慢。加速方案还没定，先测出时间花在哪一步再选。
 
 ---
 
@@ -17,17 +41,17 @@ Python 版已与 OpenMC 逐层对拍（第 9、11、12 课），之后重写为 
 
 - Python 3.10（conda 环境 `openmc`）
 - 第 1–4 课**只用标准库 `math`**，不依赖 numpy
-- `plot_lesson03_scaffold.py` 另需 matplotlib 3.10.9 + numpy 2.2.6
+- `lessons/plot_lesson03_scaffold.py` 另需 matplotlib 3.10.9 + numpy 2.2.6
 - 第 5 课起需要 **h5py + numpy + matplotlib**
 
 ⚠️ **第 5 课的脚本需要 ENDF/B-VIII.0 截面库，该库约 15 GB，不在本仓库内。**
 用的是 LANL 版 `lib80x_hdf5`（589 个核素的 `.h5` + `cross_sections.xml`）。
-路径写在各脚本开头的 `LIB = r"..."` 一行，自行改成本机路径即可。
+路径只写在 `lib_path.py` 一处：改那一行，或者设环境变量 `BNCT_LIB` 指向本机的库目录。
 
-每个 `lessonNN_*.py` 都是可独立运行的脚本：
+每个脚本都可以单独运行（子文件夹里的脚本开头会自己把根目录加进搜索路径，在哪个目录下运行都行）：
 
 ```
-python lesson03_tally.py
+python lessons/lesson03_tally.py
 ```
 
 **所有验证都写成 `assert`，脚本正常退出即等于验证全部通过。**
@@ -57,7 +81,7 @@ python lesson03_tally.py
 
 ### 第 3 课：径迹长度估计器与深度通量
 
-`lesson03_tally.py` — N=1e6，20 层分箱，每层带误差棒（输出存档见 `outputs/lesson03_N1e6.txt`）
+`lessons/lesson03_tally.py` — N=1e6，20 层分箱，每层带误差棒（输出存档见 `outputs/lesson03_N1e6.txt`）
 
 | case | 几何与截面 | 实测 |
 |---|---|---|
@@ -69,14 +93,14 @@ python lesson03_tally.py
 - **半对数斜率判据**：case1 是纯吸收，通量应严格按 `exp(-Σt·z)` 衰减，于是
   `ln(φ₁/φ₂₀)/Δz = ` **1.0007**，应等于 Σt = 1.0。这是一条能从图上用尺子量出来的判据。
 
-`plot_lesson03_scaffold.py` — 把三个 case 画成带误差棒的深度通量曲线。
+`lessons/plot_lesson03_scaffold.py` — 把三个 case 画成带误差棒的深度通量曲线。
 **误差棒的真实性单独验过**：把误差整体放大 100 倍，图上肉眼可见变粗，再改回 1.0。
 
-![三个 case 的深度通量曲线，带误差棒](lesson03_flux.png)
+![三个 case 的深度通量曲线，带误差棒](lessons/lesson03_flux.png)
 
 ### 第 4 课：弹性散射运动学与慢化
 
-`lesson04_energy.py` — 九条验证，A=1（氢）与 A=12（碳）各跑一遍。
+`lessons/lesson04_energy.py` — 九条验证，A=1（氢）与 A=12（碳）各跑一遍。
 
 | 判据 | A=1 实测 / 解析 | A=12 实测 / 解析 |
 |---|---|---|
@@ -95,8 +119,8 @@ python lesson03_tally.py
 
 ### 第 5 课：连续能量截面（ENDF/B-VIII.0，294 K）
 
-`xslib.py`（读库与求和）、`plot_xs.py`（出图）、`lesson05_tissue_scaffold.py`（软组织混合）、
-`explore/h5_first_look.py` 与 `explore_reactions_scaffold.py`（结构探路）。
+`lessons/xslib.py`（读库与求和）、`lessons/plot_xs.py`（出图）、`lessons/lesson05_tissue_scaffold.py`（软组织混合）、
+`explore/h5_first_look.py` 与 `lessons/explore_reactions_scaffold.py`（结构探路）。
 
 **总截面不在库里。** OpenMC 的 HDF5 格式故意不存 MT=1 —— ENDF 的 MT 号是一棵树，
 总截面是树根，存了就有和叶子对不上的风险。程序按每个反应道的 `redundant` 属性**只取叶子求和**；
@@ -137,7 +161,7 @@ B-10 共 58 个反应道，其中 `redundant=1` 的 10 个（MT=4/103/105/107/20
 **独立对拍**：把 MT=107 按 1/v 从 2.4638e−2 eV 外推到 0.0253 eV 得 **3844.40 barn**，
 与另一条路径独立测得的 **3844 barn** 相对差 **1.04e−4**。
 
-![B-10 与 H-1 的总截面（双对数）](total_xs.png)
+![B-10 与 H-1 的总截面（双对数）](lessons/total_xs.png)
 
 **H-1：一个被"教科书值"坑住的判据。**
 自由原子总截面是 20.44 barn，而库里实测 `σ(2.464e-02 eV) = ` **30.6492 barn**，高出 48%。
@@ -166,7 +190,7 @@ B-10 共 58 个反应道，其中 `redundant=1` 的 10 个（MT=4/103/105/107/20
 四种元素在各自的能量网格上（631 / 941 / … 点，互不相同），先用 log-log 插值搬到同一张
 400 点对数等间距公共网格，再相加。
 
-![ICRU-44 软组织的宏观总截面](tissue_sigma.png)
+![ICRU-44 软组织的宏观总截面](lessons/tissue_sigma.png)
 
 曲线在 0.3 eV – 1e4 eV 之间有一个 **≈1.48 cm⁻¹ 的平台，那就是"靶核静止"的极限值**；
 热能点的 2.148 比它高 1.45 倍，**高出来的全部是 294 K 的热运动**。
@@ -185,7 +209,7 @@ KUR 超热束三群谱（Fujiwara 2013 表 1）从表面垂直入射；两边读
 OpenMC 用三维盒子 + 侧面反射边界，等价于一维平板。
 统计量：本程序 10⁵ 历史 × 2 个种子；OpenMC 10⁶ 历史 × 10 个种子。
 
-`lesson09_openmc.py`（OpenMC 输入）· `lesson09_compare.py`（逐层比较）· `lesson09_plot.py`（出图）
+`openmc_compare/openmc_tissue.py`（OpenMC 输入）· `openmc_compare/compare_tissue.py`（逐层比较）· `openmc_compare/plot_tissue.py`（出图）
 
 ![本程序 vs OpenMC：D_B、D_N、D_H 深度剂量与逐层比值](outputs/lesson09_final.png)
 
@@ -237,7 +261,7 @@ E_R = E_γ²/(2M_d c²) = 2.2246²/(2 × 1875.6) MeV ≈ 1317 eV（从库里的 
 **同一个问题**：15 cm 水平板（H-1 / O-16 + B-10 15 ppm，ρ = 0.998 g/cm³，294 K），30 层 × 0.5 cm；KUR 三群源垂直入射；
 同一份 ENDF/B-VIII.0 库；两边都不开 S(α,β)。本程序 10⁵ 历史；OpenMC 10⁷ 历史 × 10 个种子。
 
-`lesson11_water.py`（材料）· `lesson11_mt301.py`（读 MT=301）· `lesson11_openmc.py`（OpenMC 输入）· `lesson11_compare.py`（逐层比较）· `lesson11_plot.py`（出图）
+`water.py`（材料）· `heating.py`（读 MT=301）· `openmc_compare/openmc_water.py`（OpenMC 输入）· `openmc_compare/compare_water.py`（逐层比较）· `openmc_compare/plot_water.py`（出图）
 
 ![本程序 vs OpenMC：水模体按核素 kerma 与逐层比值](outputs/m2_final.png)
 
@@ -293,10 +317,10 @@ E_R = E_γ²/(2M_d c²) = 2.2246²/(2 × 1875.6) MeV ≈ 1317 eV（从库里的 
 - **真实弹性角分布**：H-1、O-16 用库里 MT=2 的质心系角分布（线性插值表），替换第 11 课的「质心系各向同性」（近似 #4）。
 
 `thermal.py`（`load_thermal` / `sample_thermal` / `rotate_dir`）· `elastic_angle.py`（`load_elastic_angle` / `sample_elastic_mu`）·
-`lesson07_freegas.py` 的 `lookup_xs`、`collide`、`free_gas_kinematics` 加了开关（`thermal=None`、`angle=None`）· `lesson11_openmc.py` 的 `mater_water(sab=True)`
+`transport.py` 的 `lookup_xs`、`collide`、`free_gas_kinematics` 加了开关（`thermal=None`、`angle=None`）· `openmc_compare/openmc_water.py` 的 `mater_water(sab=True)`
 
 **先换随机数**：多种子统计之前要先解决第 11 课发现的序列重叠 → 换成模 2⁶³ 的 LCG，第 i 条历史从序列第 i × 152917 个数开始
-（跳步算法，O(log n) 步跳到），历史之间互不重叠，也为以后 GPU「一线程一历史」做准备。判据 `check_rng.py` R1–R5。
+（跳步算法，O(log n) 步跳到），历史之间互不重叠，也为以后 GPU「一线程一历史」做准备。判据 `checks/check_rng.py` R1–R5。
 
 **单元判据**（每条先在故意写错的版本上试响，确认会响、响对那一条）：
 
@@ -357,11 +381,13 @@ S(α,β) 的效果两边一致：OpenMC 开 / 不开 S，**D_B 浅处（1.75 cm�
 - **自测 1**（贝塞尔方差恒等式）：容差写成 `5/3` 而不是手打 `1.666667` —— 手抄近似值与真值差 3e-7，比 1e-12 的容差大五个数量级。**恒等式级判据不允许出现手抄的近似值。**
 - **自测 2**（卡方）：用非零算例 `[12,8,10,10]`、手算 0.8。原来的"全等于期望 → χ²=0"任何"永远返回 0"的实现都能通过，是一条无效判据。
 - `chi2_uniform` 里的 `assert expected >= 5` 同时是判据和**适用范围说明书**：期望频数掉到个位数时卡方近似失效，`chi2 < 43.82` 会既不报错也不正确。
-- **重构的正确性判据**：抽出模块后，`lesson04_energy.py` 输出 **26 行 = 26 行，0 处不同**；`lesson03_tally.py` **80 行 = 80 行，0 处不同**。
+- **重构的正确性判据**：抽出模块后，`lessons/lesson04_energy.py` 输出 **26 行 = 26 行，0 处不同**；`lessons/lesson03_tally.py` **80 行 = 80 行，0 处不同**。
 
 ---
 
 ## 怎么知道结果是对的
+
+**先说这套验证能说明什么、不能说明什么**：整体对拍的参照是 OpenMC，两边读的是同一套 ENDF/B-VIII.0 数据。所以对拍通过说明的是「**我的实现没有写错**」，不是「和实验相符」—— 本仓库还没有和任何实验基准比过。
 
 本仓库用四档强度的判据，**强度不同，能下的结论也不同**：
 
@@ -386,23 +412,23 @@ S(α,β) 的效果两边一致：OpenMC 开 / 不开 S，**D_B 浅处（1.75 cm�
 
 ## 目录
 
-目录（2026-09-20 收纳）：根目录只放**可运行、互相 import 的代码**和它们生成的图/csv；`archive/` 早期练习 · `explore/` 读 HDF5 的探路脚本 · `whiteboard/` 白板题 · `specs/` 各课规格书 · `docs/` 手册与笔记 · `outputs/` 旧输出。
+目录见开头「文件夹结构」一节。下表按课列文件：
 
 | 类别 | 文件 |
 |---|---|
 | 第 1 课 | `archive/lesson01_lcg.py` `archive/lesson01_flight.py` `archive/lesson01_error.py` |
 | 第 2 课 | `archive/lesson02_direction.py` `archive/lesson02_slab.py` `archive/lesson02_slab_v3.py` |
-| 第 3 课 | `lesson03_tally.py` `plot_lesson03_scaffold.py` `outputs/lesson03_N1e6.txt` |
-| 第 4 课 | `lesson04_energy.py` `specs/lesson04_spec.md` |
-| 第 5 课 | `xslib.py` `plot_xs.py` `lesson05_tissue_scaffold.py` `explore/h5_first_look.py` `explore_reactions_scaffold.py` |
-| 第 6 课 | `lesson06_continuous.py` `xs_lookup.py` `sample_reaction.py` `sample_reaction_bisect.py` |
-| 第 7 课 | `lesson07_freegas.py`；判据（AI 助手写）`lesson07_checks.py` `lesson07_check1.py` `lesson07_check2.py` `lesson07_check4.py` |
-| 第 8 课 | `lesson08_dose.py`；判据与核数（AI 助手写）`lesson08_checks.py` `lesson08_check4.py` `lesson08_check_dose.py` `lesson08_check_src.py` `lesson08_xs_numbers.py` |
-| 第 9 课 | `lesson09_openmc.py` `lesson09_compare.py` `lesson09_plot.py`；判据（AI 助手写）`lesson09_check1.py` – `lesson09_check5.py` `lesson09_check_se.py` |
-| 第 11 课 | `lesson11_water.py` `lesson11_mt301.py` `lesson11_openmc.py` `lesson11_iso.py` `lesson11_compare.py` `lesson11_seeds.py` `lesson11_plot.py` `lesson11_muen.py`（NIST 水的 μ/ρ、μen/ρ）`lesson11_qthr.py`（Q 值反推阈值）；判据（AI 助手写）`lesson11_check3.py` `lesson11_check_rho.py` `lesson11_rho_mine.py` `check_kerma.py` `check_split.py` |
-| 第 12 课 | `thermal.py` `elastic_angle.py` `rng.py`（跳步）；判据（AI 助手写）`check_thermal.py` `check_elastic.py` `check_lookup.py` `check_rng.py` `check3_m3.py` `check3_m3_recal.py` `check3_m3_seeds.py` `check3_seeds.py` `check3_diag.py` `check_tissue.py` |
+| 第 3 课 | `lessons/lesson03_tally.py` `lessons/plot_lesson03_scaffold.py` `outputs/lesson03_N1e6.txt` |
+| 第 4 课 | `lessons/lesson04_energy.py` `specs/lesson04_spec.md` |
+| 第 5 课 | `lessons/xslib.py` `lessons/plot_xs.py` `lessons/lesson05_tissue_scaffold.py` `explore/h5_first_look.py` `lessons/explore_reactions_scaffold.py` |
+| 第 6 课 | `lessons/lesson06_continuous.py` `xs_lookup.py` `sample_reaction.py` `sample_reaction_bisect.py` |
+| 第 7 课 | `transport.py`；判据（AI 助手写）`checks/check_L07_3_5.py` `checks/check_L07_1.py` `checks/check_L07_2.py` `checks/check_L07_4.py` |
+| 第 8 课 | `dose.py`；判据与核数（AI 助手写）`checks/check_L08_1_3.py` `checks/check_L08_4.py` `checks/check_L08_dose.py` `checks/check_L08_src.py` `lessons/lesson08_xs_numbers.py` |
+| 第 9 课 | `openmc_compare/openmc_tissue.py` `openmc_compare/compare_tissue.py` `openmc_compare/plot_tissue.py`；判据（AI 助手写）`checks/check_L09_1.py` – `checks/check_L09_5.py` `checks/check_L09_se.py` |
+| 第 11 课 | `water.py` `heating.py` `openmc_compare/openmc_water.py` `openmc_compare/openmc_water_iso.py` `openmc_compare/compare_water.py` `openmc_compare/seeds_water.py` `openmc_compare/plot_water.py` `lessons/lesson11_muen.py`（NIST 水的 μ/ρ、μen/ρ）`lessons/lesson11_qthr.py`（Q 值反推阈值）；判据（AI 助手写）`checks/check_M2_3.py` `checks/check_M2_rho_openmc.py` `checks/check_M2_rho_mine.py` `checks/check_kerma.py` `checks/check_split.py` |
+| 第 12 课 | `thermal.py` `elastic_angle.py` `rng.py`（跳步）；判据（AI 助手写）`checks/check_thermal.py` `checks/check_elastic.py` `checks/check_lookup.py` `checks/check_rng.py` `checks/check_M3_3.py` `checks/check_M3_3_recal.py` `checks/check_M3_3_seeds.py` `checks/check_M3_seeds.py` `checks/check_M3_diag.py` `checks/check_tissue.py` |
 | 公共模块 | `mcstat.py` `rng.py` `specs/mcstat_spec.md` |
-| 白板题（手写练习规格书） | `whiteboard/whiteboard_02_spec.md` `whiteboard/whiteboard_05_spec.md` `whiteboard/whiteboard_05_scaffold.py` `whiteboard_05_rewrite.py` `whiteboard/whiteboard_06_spec.md` `whiteboard/whiteboard_06_loglog.py` |
+| 白板题（手写练习规格书） | `whiteboard/whiteboard_02_spec.md` `whiteboard/whiteboard_05_spec.md` `whiteboard/whiteboard_05_scaffold.py` `whiteboard/whiteboard_05_rewrite.py` `whiteboard/whiteboard_06_spec.md` `whiteboard/whiteboard_06_loglog.py` |
 | 工具讲义 | `docs/tool_debugger_guide.md` `docs/tool_git_guide.md` `docs/tool_matplotlib_guide.md` `specs/matplotlib_spec.md` |
 
 ---
@@ -415,5 +441,5 @@ S(α,β) 的效果两边一致：OpenMC 开 / 不开 S，**D_B 浅处（1.75 cm�
 | M2 | 水模体 + 按核素 kerma，与 OpenMC 对拍；近似 #4 的单变量实验（第 11 课） | ✅ 2026-10-29 |
 | M3 | 水的 S(α,β)（束缚氢热散射）+ 库里的真实弹性角分布（第 12 课） | ✅ 2026-11-08 |
 | M4 | γ 光子输运 + 光子 kerma | |
-| M5 | 三维体素几何 | |
-| 之后 | C++ 重写 → CUDA 移植，给出 GPU / CPU 加速比 | |
+| 加速 | 先测时间花在哪一步，再定方案；给出和 Python 版的加速比，结果与 Python 版对拍 | |
+| 三维 | 三维体素几何 | |

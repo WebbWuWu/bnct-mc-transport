@@ -7,7 +7,7 @@
 #  输入和 m3_water_mine.py 一样（水模体、KUR 源、z_src = 0、隐式俘获、15 cm、30 层，thermal + angle 都开），
 #  只是 N = 2 万、种子 3001–3010（和 10/31 那 30 个 M2 种子 2001–2030 错开）。
 #  存：outputs\water_SA_N20000_s3001.json … s3010.json。已经存在的跳过（中途断了重开会接着跑）。
-#  跑完 Ctrl+F5 跑 my_code\check3_m3_seeds.py。
+#  跑完 Ctrl+F5 跑 my_code\check_M3_3_seeds.py。
 # ============================================================
 
 import os
@@ -17,9 +17,9 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))          # my_code 根目录：本文件在 my_code\explore\ 里
 
-from lesson07_freegas import run_slab
-from lesson11_water import build_water
-from lesson08_dose import kur_table, KEEP_FACTOR, D, NL, OUT_DIR, save_result
+from transport import run_slab
+from water import build_water
+from dose import kur_table, KEEP_FACTOR, D, NL, OUT_DIR, save_result
 from thermal import load_thermal, SAB_PATH, T_TAG
 from elastic_angle import load_elastic_angle, LIB, NUCS
 
@@ -43,4 +43,4 @@ if __name__ == "__main__":
                      src=(edges, shares), thermal=thermal, angle=angle)
         save_result(r, stem)
         print("种子 %d 存好（%.1f 分钟，累计 %.1f 分钟）" % (seed, (time.time() - t0) / 60, (time.time() - t_all) / 60))
-    print("10 个种子都好了 → Ctrl+F5 跑 my_code\\check3_m3_seeds.py")
+    print("10 个种子都好了 → Ctrl+F5 跑 my_code\\check_M3_3_seeds.py")

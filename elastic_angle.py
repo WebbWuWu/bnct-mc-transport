@@ -12,7 +12,8 @@ import os,math
 import h5py
 import numpy as np
 
-LIB = r"E:\BNCT_GPU\lib80x_hdf5" if os.name == "nt" else "/mnt/e/BNCT_GPU/lib80x_hdf5"   # 截面库目录；11/6：Windows / WSL（OpenMC 那边）都能 import
+from lib_path import LIB_DIR
+LIB = LIB_DIR                        # 截面库目录；11/10：统一写在 lib_path.py（值没变）
 NUCS = ("H1", "O16")                 # 水模体里要换真实角分布的两个核素
 
 for _nuc in NUCS:
@@ -77,6 +78,8 @@ def sample_elastic_mu(ang,E,rng):
     return mu
         
 if __name__ == "__main__":
+    import sys                                                         # 11/10：判据挪进了 checks\
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "checks"))
     from check_elastic import check_A, check_A_selftest
     angle=load_elastic_angle(LIB, NUCS)
     from rng import lcg
