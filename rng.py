@@ -24,8 +24,10 @@ S=152917
 class lcg:
     def __init__(self,seed):
         self.state=seed
+        self.n=0      # 🆕 11/10 Claude：一共抽了几个数（M4 第二轮第 2 条：每条历史用量 < S 的 assert 用）。只计数，随机数的值一位不变
     def uint(self):
         self.state=(self.state*a+c)%m
+        self.n+=1     # 🆕 11/10 Claude：每走一步记一个
         return self.state
     def random(self):
         return (self.uint()>>10)/2**53
