@@ -21,6 +21,7 @@ from xs_lookup import LIB,sigma_at,find_cell,load_nuclide
 from thermal import sample_thermal,rotate_dir
 from elastic_angle import sample_elastic_mu
 from photon import emit_photons
+from photon import record_site, load_photon, run_photons
 
 def path_A_prob(y):
     return y*math.sqrt(math.pi)/(y*math.sqrt(math.pi)+2)
@@ -454,7 +455,7 @@ def start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng):
     p={"z":z, "u":u, "v":v, "w":w, "E":E, "wt":wt, "t":t}
     hist={"track_h":track_h, "B_r":B_r, "B_c":B_c, "N_ar":N_ar, "a_g":a_g, "D_H":D_H,
           "d_his":d_his, "n_hist":n_hist, "tol_sigt_s":tol_sigt_s,"kerma_h":kerma_h
-          ,"gH_h":gH_h,"gB_h":gB_h,"pstack":[]}
+          ,"gH_h":gH_h,"gB_h":gB_h,"pstack":[],"gsites":[]}
     return p, hist
 
 
@@ -660,7 +661,7 @@ def collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz,thermal=None,an
     for j in range(len(nuclides)):
         share2[j]=sig_s[j]/sigma_s
     if gamma:
-        emit_photons(p,xs,hist,rng)
+        record_site(p,xs,hist)
     if implicit==False:
         if len_nuc==1:
             jn=0
@@ -792,8 +793,13 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
         cdf=make_cdf(shares)
     tal=make_tallies(nuclides, NL)      # 10/23 拆分 ① B：全模拟的计数装进一个字典（框架第 1 问 甲）
     dz=d/NL
+    if gamma:
+        pho=load_photon()
+    else:
+        pho=None
     for i in range(N):
         rng.state=jump(seed,i*S)
+        rng.n=0
         p, hist = start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng)
         for step in range(Max):
             xs = lookup_xs(nuclides, idx, p["E"], thermal)
@@ -818,7 +824,10 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
                 tal["n_sd"]+=1
             else:
                 tal["n_stuck"]+=1
+        if gamma:
+            run_photons(hist,rng,pho,nuclides,d,dz,NL)
         end_history(tal, hist, nuclides, NL)
+        assert rng.n < S, "第 %d 条历史（中子 + 光子）用了 %d 个随机数，超过段长 S = %d —— 会用到下一条历史的段，历史不独立了" % (i, rng.n, S)
     return finish(tal, N, dz)          # 10/23 拆分 ① C
 
 

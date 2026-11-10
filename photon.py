@@ -19,6 +19,28 @@ NUC2ELEM = {"H1": "H", "O16": "O", "B10": "B"}       # nuclides 里的 "name" �
 E_G_H=2.2233e6
 E_G_B=0.4778e6
 
+def record_site(p,xs,hist):
+    sig_cap=xs["gH_coe"]+xs["gB_coe"]
+    y=sig_cap/xs["Sigma_t"]
+    share=xs["gH_coe"]/sig_cap
+    dic={
+        "z":p["z"],
+        "wt":p["wt"],
+        "y":y,
+        "share":share,
+    }
+    hist["gsites"].append(dic)
+
+def track_photon(g, hist, rng, pho, nuclides, d, dz, NL):
+    pass
+
+def run_photons(hist, rng, pho, nuclides, d, dz, NL):
+    for site in hist["gsites"]:
+        n=emit_photons(site,hist,rng)
+    while hist["pstack"]:
+        g=hist["pstack"].pop()
+        track_photon(g,hist,rng,pho,nuclides,d,dz,NL)
+
 def loglog0(x,y,e):
     lo=np.searchsorted(x,e,side="right")-1
     if y[lo]<=0.0 or y[lo+1]<=0.0:
@@ -52,26 +74,23 @@ def photon_sigma(photon,nuclides,E):
     sig["tot"]=sig["coh"]+sig["incoh"]+sig["pe"]+sig["pair"]
     return sig
 
-def emit_photons(p,xs,hist,rng):
-    sig_cap=xs["gH_coe"]+xs["gB_coe"]
-    y=sig_cap/xs["Sigma_t"]
+def emit_photons(site,hist,rng):
     xi=rng.random()
-    n=int(xi+y)
+    n=int(xi+site["y"])
     for i in range(n):
         dic={}
         xi1=rng.random()
-        share=xs["gH_coe"]/sig_cap
-        if share>xi1:
+        if site["share"]>xi1:
             E_g=E_G_H
         else:
             E_g=E_G_B
         u,v,w=isotropic_direction(rng)
-        dic["z"]=p["z"]
+        dic["z"]=site["z"]
         dic["u"]=u
         dic["v"]=v
         dic["w"]=w
         dic["E"]=E_g
-        dic["wt"]=p["wt"]
+        dic["wt"]=site["wt"]
         hist["pstack"].append(dic)
     return n 
 
