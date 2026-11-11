@@ -39,6 +39,7 @@ SLOW = [
     ("check_L09_5",     "check_L09_5.py",     "M1：OpenMC 加 / 不加 S(α,β)"),
     ("check_M2_3",      "check_M2_3.py",      "M2：水模体 vs OpenMC（读 json）"),
     ("check_M3_seeds",  "check_M3_seeds.py",  "M3：按 10 个种子标定的形状检验（读 json）"),
+    ("check_g5",        "check_g5.py",        "M4 G5：生出来的光子总权重 vs 径迹长度 γ 计数（配对，约 3–4 分钟；11/11 加）"),
 ]
 # 不放进来的：check_L07_2（5–10 分钟）、check_L08_1_3（3–10 分钟）、check_L09_2 / check_L09_se（只能在 WSL 跑）、
 #            check_L08_4（已过时：假库没有 "heat" 键，M2 以后就跑不了了）、check_M3_3 / _recal / _diag、check_tissue*（诊断用，结论已写进小结）

@@ -24,7 +24,7 @@ from thermal import load_thermal, SAB_PATH, T_TAG
 from elastic_angle import load_elastic_angle, LIB, NUCS
 
 N_SEED = 20000
-SEEDS = range(3001, 3011)
+SEEDS = range(3001, 3031)   # 11/11 Claude 改（用户 23:58 定）：3011–3030 补 20 个，已有的 3001–3010 自动跳过。约 1 小时，可以挂后台
 
 if __name__ == "__main__":
     edges, shares = kur_table()
@@ -43,4 +43,4 @@ if __name__ == "__main__":
                      src=(edges, shares), thermal=thermal, angle=angle)
         save_result(r, stem)
         print("种子 %d 存好（%.1f 分钟，累计 %.1f 分钟）" % (seed, (time.time() - t0) / 60, (time.time() - t_all) / 60))
-    print("10 个种子都好了 → Ctrl+F5 跑 my_code\\check_M3_3_seeds.py")
+    print("种子都好了 → Ctrl+F5 跑 my_code\\checks\\check_M3_SA_segments.py（11/11：按深度分段判 S+A 那组深处 H、O 的 kerma）")
