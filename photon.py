@@ -32,7 +32,23 @@ def record_site(p,xs,hist):
     hist["gsites"].append(dic)
 
 def track_photon(g, hist, rng, pho, nuclides, d, dz, NL):
-    pass
+    while True:
+        sig=photon_sigma(pho,nuclides,g["E"])
+        s=-math.log(1 - rng.random())/sig["tot"]
+        z1=g["z"]+s*g["w"]
+        if z1>d or z1<0:
+            return 
+        else:
+            g["z"]=z1
+        x=rng.random()*sig["tot"]
+        if x<sig["pe"]:#光电
+            return 
+        elif x<sig["pe"]+sig["incoh"]:#康普顿
+            return 
+        elif x<sig["pe"]+sig["incoh"]+sig["coh"]:#相干
+            return 
+        else:#电子对
+            return 
 
 def run_photons(hist, rng, pho, nuclides, d, dz, NL):
     for site in hist["gsites"]:
@@ -40,7 +56,7 @@ def run_photons(hist, rng, pho, nuclides, d, dz, NL):
     while hist["pstack"]:
         g=hist["pstack"].pop()
         track_photon(g,hist,rng,pho,nuclides,d,dz,NL)
-
+    
 def loglog0(x,y,e):
     lo=np.searchsorted(x,e,side="right")-1
     if y[lo]<=0.0 or y[lo+1]<=0.0:
