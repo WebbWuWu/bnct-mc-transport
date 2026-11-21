@@ -443,6 +443,7 @@ def start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng):
     N_ar=[0.0]*NL
     a_g=[0.0]*NL
     D_H=[0.0]*NL
+    Dg_c=[0.0]*NL
     gH_h=[0.0]*NL
     gB_h=[0.0]*NL
     d_his={}
@@ -455,7 +456,7 @@ def start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng):
     p={"z":z, "u":u, "v":v, "w":w, "E":E, "wt":wt, "t":t}
     hist={"track_h":track_h, "B_r":B_r, "B_c":B_c, "N_ar":N_ar, "a_g":a_g, "D_H":D_H,
           "d_his":d_his, "n_hist":n_hist, "tol_sigt_s":tol_sigt_s,"kerma_h":kerma_h
-          ,"gH_h":gH_h,"gB_h":gB_h,"pstack":[],"gsites":[]}
+          ,"gH_h":gH_h,"gB_h":gB_h,"pstack":[],"gsites":[],"Dg_c":Dg_c}
     return p, hist
 
 
