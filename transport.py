@@ -280,6 +280,8 @@ def make_tallies(nuclides, NL):
     gH_sq=[0.0]*NL
     gB_sum=[0.0]*NL
     gB_sq=[0.0]*NL
+    Dg_c_sum=[0.0]*NL
+    Dg_c_sq=[0.0]*NL
     v_sum=v_sq=0.0
     track_tot_sum=0.0
     track_tot_sq=0.0
@@ -318,6 +320,8 @@ def make_tallies(nuclides, NL):
         "gH_sq":gH_sq,
         "gB_sum":gB_sum,
         "gB_sq":gB_sq,
+        "Dg_c_sum":Dg_c_sum,
+        "Dg_c_sq":Dg_c_sq,
         "tol_sigt_all":tol_sigt_all,
         "track_tot_sum":track_tot_sum,
         "track_tot_sq":track_tot_sq,
@@ -409,6 +413,8 @@ def finish(tal, N, dz):
         "gH_sq":tal["gH_sq"],
         "gB_sum":tal["gB_sum"],
         "gB_sq":tal["gB_sq"],
+        "Dg_c_sum":tal["Dg_c_sum"],
+        "Dg_c_sq":tal["Dg_c_sq"],
         "track_tot_sum":tal["track_tot_sum"],
         "track_tot_sq":tal["track_tot_sq"],
         "kerma_tot_sum":tal["kerma_tot_sum"],
@@ -738,6 +744,7 @@ def end_history(tal, hist, nuclides, NL):
     kerma_h=hist["kerma_h"]
     gH_h=hist["gH_h"]
     gB_h=hist["gB_h"]
+    Dg_c=hist["Dg_c"]
     for j in range(NL):
         for m in range(len(nuclides)):
             name=nuclides[m]["name"]
@@ -749,6 +756,8 @@ def end_history(tal, hist, nuclides, NL):
         tal["gH_sq"][j]+=gH_h[j]**2
         tal["gB_sum"][j]+=gB_h[j]
         tal["gB_sq"][j]+=gB_h[j]**2
+        tal["Dg_c_sum"][j]+=Dg_c[j]
+        tal["Dg_c_sq"][j]+=Dg_c[j]**2
         tal["track_sum"][j]+=track_h[j]
         tal["track_sq"][j]+=track_h[j]**2
         tal["Br_sum"][j]+=B_r[j]

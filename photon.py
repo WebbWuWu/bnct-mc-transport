@@ -171,6 +171,17 @@ def sample_kn_mu(E,rng):
         if rng.random()<f/2:
             return mu
     
+def trap(y,h):
+    return h*(y[0]/2+y[1:-1].sum()+y[-1]/2)
+
+def kn_T_E(E):
+    alpha=E/ME_C2
+    mu=np.linspace(-1,1,2001)
+    h=2/2000
+    k=1/(1+alpha*(1-mu))
+    f=k**2*(k+1/k-1+mu**2)
+    return 1-(trap(f*k,h)/trap(f,h))
+    
 def emit_photons(site,hist,rng):
     xi=rng.random()
     n=int(xi+site["y"])
@@ -203,3 +214,5 @@ if __name__=="__main__":
     for E in [2.2233e6,1e6,0.4778e6]:
         sig=photon_sigma(pho,nuclides,E)
         print(E,sig["tot"],sig["pair"]/sig["tot"])
+    for E in [1e4,1e6,2.2233e6]:
+        print(kn_T_E(E))
