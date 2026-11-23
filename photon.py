@@ -35,16 +35,68 @@ def record_site(p,xs,hist):
     }
     hist["gsites"].append(dic)
 
+
+def track_layer(arr,z0,z_end,w,s,val,dz,NL):
+    assert 0<=z0<=NL*dz,"z0在板外,z0 = %g 不在 [0, %g] 里" % (z0, NL*dz)
+    seg=0.0
+    if w==0:
+        k0=min(int(z0/dz),NL-1)
+        arr[k0]+=val*s
+        seg=s
+        expect=s
+    else:
+        k0=min(int(z0/dz),NL-1)
+        k1=min(int(z_end/dz),NL-1)
+        cur=z0
+        k=k0
+        guard=0
+        while True:
+            guard+=1
+            assert guard<=NL+2,\
+            "拆层循环未退出"
+            if w>0.0:
+                k_o=(k+1)*dz
+                z_step=min(z_end,k_o)
+            else:
+                k_o=k*dz
+                z_step=max(z_end,k_o)
+            assert 0<=k<NL,\
+                "k越界"
+            dz_step=abs(z_step-cur)
+            arr[k]+=val*dz_step/abs(w)
+            seg+=dz_step/abs(w)
+            cur=z_step
+            if k==k1:
+                break
+            elif w>0.0:
+                k+=1
+            else:
+                k-=1
+        expect=abs(z_end-z0)/abs(w)
+    assert math.isclose(seg, expect, rel_tol=1e-9, abs_tol=1e-12), \
+    "段记账不守恒: seg=%.15f expect=%.15f z0=%.6f z_end=%.6f w=%.9f" \
+    % (seg, expect, z0, z_end, w)
+    return seg
+
 def track_photon(g, hist, rng, pho, nuclides, d, dz, NL):
     while True:
         if g["E"]<E_CUT_G:# ④ 计数时 Dg_t 也要加这一份（审查文件第四节第 2 条）
             k=int(g["z"]/dz)
             k=min(k,NL-1)
             hist["Dg_c"][k]+=g["wt"]*g["E"]
+            hist["Dg_t"][k]+=g["wt"]*g["E"]
             return
         sig=photon_sigma(pho,nuclides,g["E"])
         s=-math.log(1 - rng.random())/sig["tot"]
         z1=g["z"]+s*g["w"]
+        if z1>d:
+            z_end=d
+        elif z1<0:
+            z_end=0.0
+        else:
+            z_end=z1
+        mt=mu_tr(sig,g["E"],pho)
+        track_layer(hist["Dg_t"],g["z"],z_end,g["w"],s,g["wt"]*mt*g["E"],dz,NL)
         if z1>d or z1<0:
             return 
         else:
@@ -128,6 +180,11 @@ def load_photon():
             assert isf.ndim == 2 and isf.shape[0] == 2, "integrated_scattering_factor 形状是 %r，不是 (2, N) —— 行 / 列的含义要重新核" % (isf.shape,)
             photon[elem]["coh_x2"]=isf[0,:]
             photon[elem]["coh_I"]=isf[1,:]
+    photon["KN"]={}
+    photon["KN"]["E"]=np.geomspace(E_CUT_G,2.3e6,200)
+    photon["KN"]["TE"]=np.zeros(len(photon["KN"]["E"]))
+    for i in range(len(photon["KN"]["E"])):
+        photon["KN"]["TE"][i]=kn_T_E(photon["KN"]["E"][i])
     return photon
 
 def photon_sigma(photon,nuclides,E):
@@ -181,6 +238,16 @@ def kn_T_E(E):
     k=1/(1+alpha*(1-mu))
     f=k**2*(k+1/k-1+mu**2)
     return 1-(trap(f*k,h)/trap(f,h))
+
+def kn_TE_tab(pho,E):
+    Eg=pho["KN"]["E"]
+    TE=pho["KN"]["TE"]
+    assert Eg[0] <= E<=Eg[-1],\
+        "E越界,E=%e,Eg[0]=%e,Eg[-1]=%e"%(E,Eg[0],Eg[-1])
+    return np.interp(E,Eg,TE)
+
+def mu_tr(sig,E,pho):
+    return sig["pe"]+sig["incoh"]*kn_TE_tab(pho,E)+sig["pair"]*(1-2*ME_C2/E)
     
 def emit_photons(site,hist,rng):
     xi=rng.random()
@@ -216,3 +283,14 @@ if __name__=="__main__":
         print(E,sig["tot"],sig["pair"]/sig["tot"])
     for E in [1e4,1e6,2.2233e6]:
         print(kn_T_E(E))
+        # [Claude 判据] μ_tr vs NIST 水的 μ_en/ρ（另一条独立的路）。
+    # 我们的水 ρ = 0.998，所以参考值 = NIST × 0.998；硼只有 15 ppm，可以忽略。
+    # 门槛（看数之前定）：相对差 < 3%（差在纯 KN 角分布、μ_tr 和 μ_en 差一个辐射份额 g ≈ 0.1%）
+    NIST_MUEN = {1e5: 0.02546, 1e6: 0.03103, 2e6: 0.02608}   # cm²/g，NIST 水
+    for E in [1e5, 1e6, 2e6]:
+        sig = photon_sigma(pho, nuclides, E)
+        mt = mu_tr(sig, E, pho)
+        ref = NIST_MUEN[E] * 0.998
+        print("mu_tr E=%g eV: 程序 %.5f /cm, 参考 %.5f /cm, 相对差 %+.2f%%" % (E, mt, ref, 100 * (mt / ref - 1)))
+        assert abs(mt / ref - 1) < 0.03, "mu_tr 在 E=%g eV 和 NIST 差超过 3%%：程序 %.5f，参考 %.5f" % (E, mt, ref)
+        

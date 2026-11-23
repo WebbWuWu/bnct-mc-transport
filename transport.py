@@ -282,6 +282,8 @@ def make_tallies(nuclides, NL):
     gB_sq=[0.0]*NL
     Dg_c_sum=[0.0]*NL
     Dg_c_sq=[0.0]*NL
+    Dg_t_sum=[0.0]*NL
+    Dg_t_sq=[0.0]*NL
     v_sum=v_sq=0.0
     track_tot_sum=0.0
     track_tot_sq=0.0
@@ -322,6 +324,8 @@ def make_tallies(nuclides, NL):
         "gB_sq":gB_sq,
         "Dg_c_sum":Dg_c_sum,
         "Dg_c_sq":Dg_c_sq,
+        "Dg_t_sum":Dg_t_sum,
+        "Dg_t_sq":Dg_t_sq,
         "tol_sigt_all":tol_sigt_all,
         "track_tot_sum":track_tot_sum,
         "track_tot_sq":track_tot_sq,
@@ -415,6 +419,8 @@ def finish(tal, N, dz):
         "gB_sq":tal["gB_sq"],
         "Dg_c_sum":tal["Dg_c_sum"],
         "Dg_c_sq":tal["Dg_c_sq"],
+        "Dg_t_sum":tal["Dg_t_sum"],
+        "Dg_t_sq":tal["Dg_t_sq"],
         "track_tot_sum":tal["track_tot_sum"],
         "track_tot_sq":tal["track_tot_sq"],
         "kerma_tot_sum":tal["kerma_tot_sum"],
@@ -450,6 +456,7 @@ def start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng):
     a_g=[0.0]*NL
     D_H=[0.0]*NL
     Dg_c=[0.0]*NL
+    Dg_t=[0.0]*NL
     gH_h=[0.0]*NL
     gB_h=[0.0]*NL
     d_his={}
@@ -462,7 +469,7 @@ def start_history(nuclides, NL, z_src, E_src, src, edges, cdf, rng):
     p={"z":z, "u":u, "v":v, "w":w, "E":E, "wt":wt, "t":t}
     hist={"track_h":track_h, "B_r":B_r, "B_c":B_c, "N_ar":N_ar, "a_g":a_g, "D_H":D_H,
           "d_his":d_his, "n_hist":n_hist, "tol_sigt_s":tol_sigt_s,"kerma_h":kerma_h
-          ,"gH_h":gH_h,"gB_h":gB_h,"pstack":[],"gsites":[],"Dg_c":Dg_c}
+          ,"gH_h":gH_h,"gB_h":gB_h,"pstack":[],"gsites":[],"Dg_c":Dg_c,"Dg_t":Dg_t}
     return p, hist
 
 
@@ -745,6 +752,7 @@ def end_history(tal, hist, nuclides, NL):
     gH_h=hist["gH_h"]
     gB_h=hist["gB_h"]
     Dg_c=hist["Dg_c"]
+    Dg_t=hist["Dg_t"]
     for j in range(NL):
         for m in range(len(nuclides)):
             name=nuclides[m]["name"]
@@ -758,6 +766,8 @@ def end_history(tal, hist, nuclides, NL):
         tal["gB_sq"][j]+=gB_h[j]**2
         tal["Dg_c_sum"][j]+=Dg_c[j]
         tal["Dg_c_sq"][j]+=Dg_c[j]**2
+        tal["Dg_t_sum"][j]+=Dg_t[j]
+        tal["Dg_t_sq"][j]+=Dg_t[j]**2
         tal["track_sum"][j]+=track_h[j]
         tal["track_sq"][j]+=track_h[j]**2
         tal["Br_sum"][j]+=B_r[j]
