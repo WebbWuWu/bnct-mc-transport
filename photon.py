@@ -12,6 +12,8 @@ import numpy as np
 from rng import isotropic_direction
 from lib_path import LIB_DIR
 from thermal import rotate_dir
+from rng import lcg
+from mcstat import mean_se
 _LIB_DIR = LIB_DIR                                   # 11/10：库路径统一写在 lib_path.py（值没变）
 PHOTON_DIR = os.path.join(_LIB_DIR, "photon")
 
@@ -146,6 +148,55 @@ def track_photon(g, hist, rng, pho, nuclides, d, dz, NL):
                     }
             hist["pstack"].append(dirc2)
             return 
+
+def run_beam(N,seed,E0,pho,nuclides,d,NL):
+    dz=d/NL
+    rng=lcg(seed)
+    t_sum=[0.0]*NL
+    t_sq=[0.0]*NL
+    c_sum=[0.0]*NL
+    c_sq=[0.0]*NL
+    for i in range(N):
+        hist={
+            "Dg_c":[0.0]*NL,
+            "Dg_t":[0.0]*NL,
+            "pstack":[],
+        }
+        g={
+            "z":0.0,
+            "u":0.0,
+            "v":0.0,
+            "w":1.0,
+            "E":E0,
+            "wt":1.0
+        }
+        hist["pstack"].append(g)
+        while hist["pstack"]:
+            g=hist["pstack"].pop()
+            track_photon(g,hist,rng,pho,nuclides,d,dz,NL)
+        for k in range(NL):
+            t_sum[k]+=hist["Dg_t"][k]
+            t_sq[k]+=hist["Dg_t"][k]**2
+            c_sum[k]+=hist["Dg_c"][k]
+            c_sq[k]+=hist["Dg_c"][k]**2
+    t_mean=[]
+    t_se=[]
+    c_mean=[]
+    c_se=[]
+    for k in range(NL):
+        mean,_,se=mean_se(t_sum[k],t_sq[k],N)
+        t_mean.append(mean)
+        t_se.append(se)
+        mean1,_,se1=mean_se(c_sum[k],c_sq[k],N)
+        c_mean.append(mean1)
+        c_se.append(se1)
+    return {
+        "t_mean":t_mean,
+        "t_se":t_se,
+        "c_mean":c_mean,
+        "c_se":c_se,
+        "N":N,
+    }
 
 def run_photons(hist, rng, pho, nuclides, d, dz, NL):
     for site in hist["gsites"]:
