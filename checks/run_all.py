@@ -27,6 +27,9 @@ QUICK = [
     ("check_lookup",  "check_lookup.py", "T5：开 S(α,β) 时 lookup_xs 换对了截面、总截面跟着改"),
     ("check_photon",  "check_photon.py", "P1：光子截面合成水 vs NIST XCOM"),
     ("check_emit",    "check_emit.py",   "G1、G2：生光子的个数、选线、方向、权重"),
+    ("check_p2",      "check_p2.py",     "P2：Klein–Nishina 抽 μ（⟨μ⟩、往前比例、舍选效率；带自检）"),
+    ("check_p3",      "check_p3.py",     "P3：2.2233 MeV 光子穿 15 cm 水不撞的份额 vs exp(−Σ_tot d)（带自检）"),
+    ("check_kn_te",   "check_kn_te.py",  "KT：⟨T⟩/E 现算 vs 闭式解、表 vs 现算、表的范围（带自检）"),
 ]
 SLOW = [
     ("check_kerma",     "check_kerma.py",     "K0–K2：按核素 kerma（径迹）vs 碰撞估计 / 逐道 Q 值"),
@@ -40,6 +43,7 @@ SLOW = [
     ("check_M2_3",      "check_M2_3.py",      "M2：水模体 vs OpenMC（读 json）"),
     ("check_M3_seeds",  "check_M3_seeds.py",  "M3：按 10 个种子标定的形状检验（读 json）"),
     ("check_g5",        "check_g5.py",        "M4 G5：生出来的光子总权重 vs 径迹长度 γ 计数（配对，约 3–4 分钟；11/11 加）"),
+    ("check_p4",        "check_p4.py",        "M4 P4：同一次模拟里 Dg_t（径迹）vs Dg_c（碰撞），配对；约 4–6 分钟（11/24 加）"),
 ]
 # 不放进来的：check_L07_2（5–10 分钟）、check_L08_1_3（3–10 分钟）、check_L09_2 / check_L09_se（只能在 WSL 跑）、
 #            check_L08_4（已过时：假库没有 "heat" 键，M2 以后就跑不了了）、check_M3_3 / _recal / _diag、check_tissue*（诊断用，结论已写进小结）

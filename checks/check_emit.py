@@ -27,6 +27,10 @@
 #      抓：光子的随机数在中子历史中途被抽了（11/10 第 3 条 / C8 那个「随机数流错位」）
 #      自检：包一层 collide，开 gamma 时多抽一个 ξ（= 改之前那种写法），必须判出不同
 #      🔴 只做完第 1 步时，这条是「白过」的（还一个光子都没生）；第 2 步写完再跑才算数
+#      🆕 11/24 Claude 改：光子自己的 4 个计数键（PHOTON_KEYS）不算「中子那边」，从逐位比较里拿掉。
+#         11/23 Dg_t 接进 tal 以后，开光子时这 4 个键本来就该不同 → G6 误响（判据的错，不是程序的错）。
+#         更要紧的是自检：以前这 4 个键一不同，自检就「白响」，现在只看中子的键，自检才真的在测随机数流。
+#         另加一行：gamma=False 时这 4 个键全是 0、gamma=True 时 Dg_t_sum 不全是 0（抓：关着也记、开着没记）
 # ============================================================
 # ---- 路径（2026-11-10 整理文件夹，Claude 加）：本文件在 my_code 的子文件夹里。
 #      下面几行把 my_code 根目录和各子文件夹加进搜索路径，后面的 import 才找得到别的文件。----
@@ -180,9 +184,18 @@ def _same(a, b):
     return a == b
 
 
+PHOTON_KEYS = ("Dg_c_sum", "Dg_c_sq", "Dg_t_sum", "Dg_t_sq")   # 光子自己的计数：开光子时本来就该不同（11/24 加）
+
+
 def _diff_keys(off, on):
-    """gamma=False 那份里的每个键，在 gamma=True 那份里不在或不同的，列出来。"""
-    return [k for k in off if k not in on or not _same(off[k], on[k])]
+    """gamma=False 那份里的每个中子的键（不含 PHOTON_KEYS），在 gamma=True 那份里不在或不同的，列出来。"""
+    return [k for k in off if k not in PHOTON_KEYS and (k not in on or not _same(off[k], on[k]))]
+
+
+def _all_zero(x):
+    if hasattr(x, "tolist"):
+        x = x.tolist()
+    return all(v == 0 for v in x) if isinstance(x, (list, tuple)) else x == 0
 
 
 if __name__ == "__main__":
@@ -245,8 +258,15 @@ if __name__ == "__main__":
         on = run_slab(300, 52741, 15.0, nuclides, None, order, gamma=True, **kw)
         bad = _diff_keys(off, on)
         g6_ok = g6_ok and not bad
-        print("  %s %s：gamma=False 的 %d 个键%s" % ("✅" if not bad else "❌", "隐式" if implicit else "模拟",
-              len(off), "全部逐位相同" if not bad else "里有 %d 个不同：%s" % (len(bad), ", ".join(bad[:8]))))
+        n_neu = len([k for k in off if k not in PHOTON_KEYS])
+        print("  %s %s：中子的 %d 个键%s" % ("✅" if not bad else "❌", "隐式" if implicit else "模拟",
+              n_neu, "全部逐位相同" if not bad else "里有 %d 个不同：%s" % (len(bad), ", ".join(bad[:8]))))
+        off_zero = all(_all_zero(off[k]) for k in PHOTON_KEYS if k in off)
+        on_some = ("Dg_t_sum" in on) and not _all_zero(on["Dg_t_sum"])
+        good_ph = off_zero and on_some
+        g6_ok = g6_ok and good_ph
+        print("     %s 光子计数：gamma=False 时 %s，gamma=True 时 Dg_t_sum %s" % ("✅" if good_ph else "❌",
+              "全是 0" if off_zero else "不全是 0（关着也记了）", "有数" if on_some else "全是 0（开着没记）"))
     # 自检：包一层 collide —— 开 gamma 时在碰撞当下多抽一个 ξ（就是改之前那种写法），必须判出不同
     _orig_collide = T.collide
 
