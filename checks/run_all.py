@@ -44,6 +44,8 @@ SLOW = [
     ("check_M3_seeds",  "check_M3_seeds.py",  "M3：按 10 个种子标定的形状检验（读 json）"),
     ("check_g5",        "check_g5.py",        "M4 G5：生出来的光子总权重 vs 径迹长度 γ 计数（配对，约 3–4 分钟；11/11 加）"),
     ("check_p4",        "check_p4.py",        "M4 P4：同一次模拟里 Dg_t（径迹）vs Dg_c（碰撞），配对；约 4–6 分钟（11/24 加）"),
+    ("check_p6",        "check_p6.py",        "M4 P6：光子单独 vs OpenMC（读 openmc_photon_*.json，现跑 30 万光子 + 自检；约 5 分钟；11/25 加）"),
+    ("check_p7",        "check_p7.py",        "M4 P7：中子—光子耦合 vs OpenMC（读 coupled_SA_* 和 openmc_coupled_*.json，自检现跑；约 7 分钟；11/25 加）"),
 ]
 # 不放进来的：check_L07_2（5–10 分钟）、check_L08_1_3（3–10 分钟）、check_L09_2 / check_L09_se（只能在 WSL 跑）、
 #            check_L08_4（已过时：假库没有 "heat" 键，M2 以后就跑不了了）、check_M3_3 / _recal / _diag、check_tissue*（诊断用，结论已写进小结）
