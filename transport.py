@@ -524,16 +524,11 @@ def lookup_xs(nuclides, idx, E,thermal=None):
             "kerco":kerco,"gH_coe":gH_coe,"gB_coe":gB_coe}
 
 
-def fly(p, xs, hist, rng, d, dz, NL, t_cut):
-    """飞一段：抽飞行距离 → 时间截断 → 这一段按层拆开记账（径迹长度估计）→ 更新位置。
-    改 p（z、t）和 hist；返回这一段是不是被时间截断了（原来的 has_sign）。
-    M5 三维只改这一个函数。原历史循环每步第 29–111 行。"""
-    E=p["E"]
-    w=p["w"]
-    wt=p["wt"]
-    z=p["z"]
-    t=p["t"]
-    Sigma_t=xs["Sigma_t"]
+def score_layers(z0, z_end, s, w, wt, xs, hist, dz, NL):
+    """一段径迹按 z 层拆开记账（径迹长度估计）：从 z0 走到 z_end，方向余弦 w，这一段的路程 s，权重 wt。
+    记进 hist 里按层的数组（track_h、B_r、B_c、N_ar、a_g、kerma_h、gH_h、gB_h）；返回这一段一共记了多少路程 seg。
+    w = 0 时整段留在起点层，记 s；否则每层记 dz_step / |w|（斜着走，层里的路程是厚度的 1/|w| 倍）。
+    11/28 Claude 从 fly 里原样拆出来（M5 搬运 ③），一个字没改：一维 fly 调它；三维 run_geom 的 z 网格计数也调它（T1a 逐位相同靠这个）。"""
     B_reac=xs["B_reac"]
     B_con=xs["B_con"]
     N_coe=xs["N_coe"]
@@ -549,31 +544,6 @@ def fly(p, xs, hist, rng, d, dz, NL, t_cut):
     kerma_h=hist["kerma_h"]
     gH_h=hist["gH_h"]
     gB_h=hist["gB_h"]
-    # 为什么是 1-rng.random() 而不是 rng.random()：
-    #   random() 返回 [0,1) —— 0 取得到，1 取不到。若写 -log(xi)，xi=0 时 log 收到 0 → -inf，程序炸。
-    #   取 1-xi 后 log 的参数落在 (0,1]，永远取不到 0。两种写法同分布，但安全性完全不同。
-    #   命中概率约 2^-53 ≈ 1e-16（random() 只在状态高 53 位全为 0 时返回 0）：实际跑不出来，但仍取得到，所以 1-xi 照留。
-    #   这个选择配套的是 rng.py 里 random() 的区间 [0,1)（只取高 53 位，10/31 换模 2^63），换 RNG 要重新核对。见 whiteboard_02_spec.md。
-    s=-math.log(1-rng.random())/Sigma_t
-    has_sign = False
-
-    if t_cut!=None:
-        t1=s/math.sqrt(E)
-        if t+t1>t_cut:
-            s=(t_cut-t)*math.sqrt(E)
-            has_sign = True
-            t=t_cut
-        else:
-            t+=t1
-    z0=z
-    z1=z0+s*w
-    if z1>d:
-        z_end=d
-    elif z1<0:
-        z_end=0.0
-    else:
-        z_end=z1
-    assert 0.0 <= z0 <= d, "z0 跑出板外了: %.15f" % z0
     seg = 0.0                                  # 本段实际记了多少
     if w == 0.0:
         k0 = int(z0 / dz)
@@ -643,22 +613,63 @@ def fly(p, xs, hist, rng, d, dz, NL, t_cut):
     assert math.isclose(seg, expect, rel_tol=1e-9, abs_tol=1e-12), \
         "段记账不守恒: seg=%.15f expect=%.15f z0=%.6f z_end=%.6f w=%.9f" \
         % (seg, expect, z0, z_end, w)
+    return seg
+
+
+def fly(p, xs, hist, rng, d, dz, NL, t_cut):
+    """飞一段：抽飞行距离 → 时间截断 → 这一段按层拆开记账（径迹长度估计）→ 更新位置。
+    改 p（z、t）和 hist；返回这一段是不是被时间截断了（原来的 has_sign）。
+    M5 三维只改这一个函数。原历史循环每步第 29–111 行。
+    11/28：拆层记账那段挪进了上面的 score_layers（M5 搬运 ③）。"""
+    E=p["E"]
+    w=p["w"]
+    wt=p["wt"]
+    z=p["z"]
+    t=p["t"]
+    Sigma_t=xs["Sigma_t"]
+    # 为什么是 1-rng.random() 而不是 rng.random()：
+    #   random() 返回 [0,1) —— 0 取得到，1 取不到。若写 -log(xi)，xi=0 时 log 收到 0 → -inf，程序炸。
+    #   取 1-xi 后 log 的参数落在 (0,1]，永远取不到 0。两种写法同分布，但安全性完全不同。
+    #   命中概率约 2^-53 ≈ 1e-16（random() 只在状态高 53 位全为 0 时返回 0）：实际跑不出来，但仍取得到，所以 1-xi 照留。
+    #   这个选择配套的是 rng.py 里 random() 的区间 [0,1)（只取高 53 位，10/31 换模 2^63），换 RNG 要重新核对。见 whiteboard_02_spec.md。
+    s=-math.log(1-rng.random())/Sigma_t
+    has_sign = False
+
+    if t_cut!=None:
+        t1=s/math.sqrt(E)
+        if t+t1>t_cut:
+            s=(t_cut-t)*math.sqrt(E)
+            has_sign = True
+            t=t_cut
+        else:
+            t+=t1
+    z0=z
+    z1=z0+s*w
+    if z1>d:
+        z_end=d
+    elif z1<0:
+        z_end=0.0
+    else:
+        z_end=z1
+    assert 0.0 <= z0 <= d, "z0 跑出板外了: %.15f" % z0
+    seg = score_layers(z0, z_end, s, w, wt, xs, hist, dz, NL)   # 11/28 M5 搬运 ③：拆层记账原样挪进 score_layers（一维 fly、三维 z 网格共用），算法一个字没改
     hist["tol_sigt_s"] += Sigma_t * seg
     p["z"] = z1
     p["t"] = t
     return has_sign
 
 
-def collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz,thermal=None,angle=None,gamma=False):
+def collide(p, xs, hist, tal, nuclides, order, rng, implicit, k_hit,thermal=None,angle=None,gamma=False):
     """撞一下：抽核素 → 抽道（模拟）或减权重 + 轮盘赌（隐式）→ 散射（改 E、方向，记 D_H）或吸收。
     改 p（E、u、v、w、wt）、hist、tal；返回这条中子还活着没有（False = 吸收或被轮盘赌杀掉，历史结束）。
-    M3 的 S(α,β)、真实角分布都改在这里。原历史循环每步第 129–184 行。"""
+    M3 的 S(α,β)、真实角分布都改在这里。原历史循环每步第 129–184 行。
+    k_hit = 碰撞点在第几层（记 D_H 用）。11/28 起由调用的地方算好传进来（M5 搬运 ①）：一维在 run_slab 里按 int(z/dz) 算，
+    三维在 run_geom 里按 z 网格算；collide 本身不再用到 z 和 dz。"""
     E=p["E"]
     u=p["u"]
     v=p["v"]
     w=p["w"]
     wt=p["wt"]
-    z=p["z"]
     sig_ds=xs["sig_ds"]
     sig_al=xs["sig_al"]
     tot_ls=xs["tot_ls"]
@@ -724,7 +735,7 @@ def collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz,thermal=None,an
             if angle is not None and nam in angle:
                 mu_cm=sample_elastic_mu(angle[nam],E,rng)
             E,u,v,w=free_gas_kinematics(E,u,v,w,A,kT,x1,mu_T,rng,mu_cm)
-        k_hit=min(int(z/dz),len(hist["D_H"])-1)      # 11/10 Claude：z 正好等于板厚 d 时夹到最后一层（和 fly 里 k1 的夹法一样；别的情况值不变）
+        # k_hit 11/28 起由调用的地方传进来（M5 搬运 ①），原来这一行是 k_hit=min(int(z/dz),len(hist["D_H"])-1)
         hist["D_H"][k_hit]+=wt*(E_be-E)
         hist["d_his"][nam][k_hit]+=wt*(E_be-E)
         p["E"]=E
@@ -837,7 +848,8 @@ def run_slab(N,seed,d,nuclides,E_src,order,z_src=None,t_cut=None,implicit=False,
                 tal["nt_cut"]+=1
                 tal["E_cut"].append(p["E"])
                 break
-            if not collide(p, xs, hist, tal, nuclides, order, rng, implicit, dz, thermal, angle,gamma):
+            k_hit=min(int(p["z"]/dz),len(hist["D_H"])-1)      # 碰撞点在第几层。11/28 从 collide 里原样挪出来（M5 搬运 ①）；z 正好等于板厚 d 时夹到最后一层（11/10）
+            if not collide(p, xs, hist, tal, nuclides, order, rng, implicit, k_hit, thermal, angle,gamma):
                 break
         else:
             if t_cut==None:

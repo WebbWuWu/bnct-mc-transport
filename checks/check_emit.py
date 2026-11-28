@@ -76,7 +76,7 @@ def run_g1(record, emit, seed=48173):
             continue
         site = hist["gsites"][-1]
         try:
-            if not (_close(site["y"], Y) and _close(site["share"], FH)
+            if not (_close(site["n_mean"], Y) and _close(site["share"], FH)
                     and site["z"] == Z0 and site["wt"] == WT0):
                 bad_site += 1
         except (KeyError, TypeError):
@@ -126,17 +126,17 @@ def run_g1(record, emit, seed=48173):
 # ---------- G2：故意写错的版本（Claude 写，只给判据自检用）----------
 def _good_record(p, xs, hist):
     cap = xs["gH_coe"] + xs["gB_coe"]
-    hist["gsites"].append({"z": p["z"], "wt": p["wt"], "y": cap / xs["Sigma_t"], "share": xs["gH_coe"] / cap})
+    hist["gsites"].append({"z": p["z"], "wt": p["wt"], "n_mean": cap / xs["Sigma_t"], "share": xs["gH_coe"] / cap})
 
 
 def _bad_record(kind):
     def record(p, xs, hist):
         cap = xs["gH_coe"] + xs["gB_coe"]
         if kind == "存了 p 本身":
-            p["y"], p["share"] = cap / xs["Sigma_t"], xs["gH_coe"] / cap
+            p["n_mean"], p["share"] = cap / xs["Sigma_t"], xs["gH_coe"] / cap
             hist["gsites"].append(p)                 # 存的是 p 这个字典本身，中子一飞就跟着变
         else:                                        # "share 记反"
-            hist["gsites"].append({"z": p["z"], "wt": p["wt"], "y": cap / xs["Sigma_t"], "share": xs["gB_coe"] / cap})
+            hist["gsites"].append({"z": p["z"], "wt": p["wt"], "n_mean": cap / xs["Sigma_t"], "share": xs["gB_coe"] / cap})
     return record
 
 
@@ -146,7 +146,7 @@ def _push(hist, site, E, u, v, w, wt=None):
 
 def _bad_emit(kind):
     def emit(site, hist, rng):
-        y = site["y"]
+        y = site["n_mean"]
         xi = rng.random()
         if kind == "不取整":
             n = int(y)                     # 永远 1 个

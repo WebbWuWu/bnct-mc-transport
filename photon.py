@@ -27,12 +27,14 @@ E_CUT_G=1.0e3
 
 def record_site(p,xs,hist):
     sig_cap=xs["gH_coe"]+xs["gB_coe"]
-    y=sig_cap/xs["Sigma_t"]
+    n_mean=sig_cap/xs["Sigma_t"]          # 11/28 改名（原来叫 y）：每次碰撞平均生几个光子；"y" 让给位置的 y 坐标
     share=xs["gH_coe"]/sig_cap
     dic={
+        "x":p.get("x",0.0),               # 11/28 M5 搬运 ②：多存 x、y（三维要用）；一维的 p 里没有 x、y，存 0.0
+        "y":p.get("y",0.0),
         "z":p["z"],
         "wt":p["wt"],
-        "y":y,
+        "n_mean":n_mean,
         "share":share,
     }
     hist["gsites"].append(dic)
@@ -302,7 +304,7 @@ def mu_tr(sig,E,pho):
     
 def emit_photons(site,hist,rng):
     xi=rng.random()
-    n=int(xi+site["y"])
+    n=int(xi+site["n_mean"])        # 11/28：键名 "y" 改成 "n_mean"（M5 搬运 ②）
     for i in range(n):
         dic={}
         xi1=rng.random()

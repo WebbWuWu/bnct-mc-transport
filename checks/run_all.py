@@ -30,6 +30,7 @@ QUICK = [
     ("check_p2",      "check_p2.py",     "P2：Klein–Nishina 抽 μ（⟨μ⟩、往前比例、舍选效率；带自检）"),
     ("check_p3",      "check_p3.py",     "P3：2.2233 MeV 光子穿 15 cm 水不撞的份额 vs exp(−Σ_tot d)（带自检）"),
     ("check_kn_te",   "check_kn_te.py",  "KT：⟨T⟩/E 现算 vs 闭式解、表 vs 现算、表的范围（带自检）"),
+    ("check_geom",    "check_geom.py",   "M5 G-1：三种面的距离 / 法向 / sense vs 不解方程的射线法 + 手算（带自检；11/28 加）"),
 ]
 SLOW = [
     ("check_kerma",     "check_kerma.py",     "K0–K2：按核素 kerma（径迹）vs 碰撞估计 / 逐道 Q 值"),
